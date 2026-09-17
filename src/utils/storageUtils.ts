@@ -1,111 +1,307 @@
-// localStorage utility functions
-import { Developer } from '../types';
-
-const STORAGE_KEY_DEVELOPERS = 'gantt_developers';
-const STORAGE_KEY_WORKING_HOURS = 'gantt_working_hours';
-const STORAGE_KEY_ACTIVE_TAB = 'gantt_active_tab';
+// Supabase storage utility functions
+import { supabase } from './supabaseClient';
+import { Developer, Task } from '../types';
 
 /**
- * Save developers to localStorage
+ * Fetch all developers with their tasks from Supabase
  */
-export function saveDevelopers(developers: Developer[]): void {
+export async function fetchDevelopers(): Promise<Developer[]> {
   try {
-    localStorage.setItem(STORAGE_KEY_DEVELOPERS, JSON.stringify(developers));
-  } catch (e) {
-    console.error('Failed to save developers to localStorage:', e);
-  }
-}
+    // Fetch all developers
+    const { data: developers, error: devError } = await supabase
+      .from('developers')
+      .select('*')
+      .order('created_at', { ascending: true });
 
-/**
- * Load developers from localStorage
- */
-export function loadDevelopers(): Developer[] | null {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY_DEVELOPERS);
-    if (data) {
-      return JSON.parse(data) as Developer[];
+    if (devError) {
+      console.error('Error fetching developers:', devError);
+      return [];
     }
-  } catch (e) {
-    console.error('Failed to load developers from localStorage:', e);
+
+    if (!developers || developers.length === 0) {
+      return [];
+    }
+
+    // Fetch all tasks
+    const { data: tasks, error: taskError } = await supabase
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (taskError) {
+      console.error('Error fetching tasks:', taskError);
+      return [];
+    }
+
+    // Map tasks to developers
+    const developerMap = new Map<string, Developer>();
+    
+    developers.forEach((dev: any) => {
+      developerMap.set(dev.id, {
+        id: dev.id,
+        name: dev.name,
+        color: dev.color,
+        tasks: [],
+      });
+    });
+
+    tasks?.forEach((task: any) => {
+      const developer = developerMap.get(task.developer_id);
+      if (developer) {
+        developer.tasks.push({
+          id: task.id,
+          title: task.title,
+          hours: task.hours,
+          startDate: task.start_date,
+          endDate: task.end_date,
+        });
+      }
+    });
+
+    return Array.from(developerMap.values());
+  } catch (error) {
+    console.error('Error in fetchDevelopers:', error);
+    return [];
   }
-  return null;
 }
 
 /**
- * Save working hours per day to localStorage
+ * Save developers to Supabase
+ * This will sync the entire state with the database
  */
-export function saveWorkingHours(hours: number): void {
+export async function saveDevelopers(developers: Developer[]): Promise<void> {
   try {
-    localStorage.setItem(STORAGE_KEY_WORKING_HOURS, String(hours));
-  } catch (e) {
-    console.error('Failed to save working hours to localStorage:', e);
+    // Get current developers from database
+    const { data: existingDevelopers } = await supabase
+      .from('developers')
+      .select('id');
+
+    const existingIds = new Set(existingDevelopers?.map((d: any) => d.id) || []);
+    const currentIds = new Set(developers.map(d => d.id));
+
+    // Delete developers that no longer exist
+    const toDelete = Array.from(existingIds).filter(id => !currentIds.has(id));
+    if (toDelete.length > 0) {
+      await supabase
+        .from('developers')
+        .delete()
+        .in('id', toDelete);
+    }
+
+    // Upsert developers
+    for (const dev of developers) {
+      if (existingIds.has(dev.id)) {
+        // Update existing developer
+        await supabase
+          .from('developers')
+          .update({
+            name: dev.name,
+            color: dev.color,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', dev.id);
+      } else {
+        // Insert new developer
+        await supabase
+          .from('developers')
+          .insert({
+            id: dev.id,
+            name: dev.name,
+            color: dev.color,
+          });
+      }
+
+      // Sync tasks for this developer
+      await syncDeveloperTasks(dev.id, dev.tasks);
+    }
+  } catch (error) {
+    console.error('Error in saveDevelopers:', error);
   }
 }
 
 /**
- * Load working hours per day from localStorage
+ * Sync tasks for a specific developer
  */
-export function loadWorkingHours(): number {
+async function syncDeveloperTasks(developerId: string, tasks: Task[]): Promise<void> {
   try {
-    const data = localStorage.getItem(STORAGE_KEY_WORKING_HOURS);
-    if (data) {
-      const hours = parseInt(data, 10);
-      if (!isNaN(hours) && hours > 0 && hours <= 24) {
-        return hours;
+    // Get current tasks for this developer
+    const { data: existingTasks } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('developer_id', developerId);
+
+    const existingIds = new Set(existingTasks?.map((t: any) => t.id) || []);
+    const currentIds = new Set(tasks.map(t => t.id));
+
+    // Delete tasks that no longer exist
+    const toDelete = Array.from(existingIds).filter(id => !currentIds.has(id));
+    if (toDelete.length > 0) {
+      await supabase
+        .from('tasks')
+        .delete()
+        .in('id', toDelete);
+    }
+
+    // Upsert tasks
+    for (const task of tasks) {
+      if (existingIds.has(task.id)) {
+        // Update existing task
+        await supabase
+          .from('tasks')
+          .update({
+            title: task.title,
+            hours: task.hours,
+            start_date: task.startDate,
+            end_date: task.endDate,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', task.id);
+      } else {
+        // Insert new task
+        await supabase
+          .from('tasks')
+          .insert({
+            id: task.id,
+            developer_id: developerId,
+            title: task.title,
+            hours: task.hours,
+            start_date: task.startDate,
+            end_date: task.endDate,
+          });
       }
     }
-  } catch (e) {
-    console.error('Failed to load working hours from localStorage:', e);
-  }
-  return 8; // Default
-}
-
-/**
- * Save active tab to localStorage
- */
-export function saveActiveTab(tabId: string): void {
-  try {
-    localStorage.setItem(STORAGE_KEY_ACTIVE_TAB, tabId);
-  } catch (e) {
-    console.error('Failed to save active tab to localStorage:', e);
+  } catch (error) {
+    console.error('Error in syncDeveloperTasks:', error);
   }
 }
 
 /**
- * Load active tab from localStorage
+ * Fetch working hours per day from Supabase
  */
-export function loadActiveTab(): string | null {
+export async function fetchWorkingHours(): Promise<number> {
   try {
-    return localStorage.getItem(STORAGE_KEY_ACTIVE_TAB);
-  } catch (e) {
-    console.error('Failed to load active tab from localStorage:', e);
+    const { data, error } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'working_hours_per_day')
+      .single();
+
+    if (error || !data) {
+      return 8; // Default value
+    }
+
+    const hours = parseInt(data.value, 10);
+    return isNaN(hours) ? 8 : hours;
+  } catch (error) {
+    console.error('Error fetching working hours:', error);
+    return 8; // Default value
   }
-  return null;
 }
 
 /**
- * Clear all application data from localStorage
+ * Save working hours per day to Supabase
  */
-export function clearAllData(): void {
+export async function saveWorkingHours(hours: number): Promise<void> {
   try {
-    localStorage.removeItem(STORAGE_KEY_DEVELOPERS);
-    localStorage.removeItem(STORAGE_KEY_WORKING_HOURS);
-    localStorage.removeItem(STORAGE_KEY_ACTIVE_TAB);
-  } catch (e) {
-    console.error('Failed to clear localStorage:', e);
+    const { data: existing } = await supabase
+      .from('settings')
+      .select('key')
+      .eq('key', 'working_hours_per_day')
+      .single();
+
+    if (existing) {
+      await supabase
+        .from('settings')
+        .update({
+          value: String(hours),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('key', 'working_hours_per_day');
+    } else {
+      await supabase
+        .from('settings')
+        .insert({
+          key: 'working_hours_per_day',
+          value: String(hours),
+        });
+    }
+  } catch (error) {
+    console.error('Error saving working hours:', error);
   }
 }
 
 /**
- * Check if localStorage is available
+ * Fetch active tab from Supabase
  */
-export function isLocalStorageAvailable(): boolean {
+export async function fetchActiveTab(): Promise<string | null> {
   try {
-    const test = '__test__';
-    localStorage.setItem(test, test);
-    localStorage.removeItem(test);
-    return true;
-  } catch {
-    return false;
+    const { data, error } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'active_tab')
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    return data.value;
+  } catch (error) {
+    console.error('Error fetching active tab:', error);
+    return null;
   }
+}
+
+/**
+ * Save active tab to Supabase
+ */
+export async function saveActiveTab(tabId: string): Promise<void> {
+  try {
+    const { data: existing } = await supabase
+      .from('settings')
+      .select('key')
+      .eq('key', 'active_tab')
+      .single();
+
+    if (existing) {
+      await supabase
+        .from('settings')
+        .update({
+          value: tabId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('key', 'active_tab');
+    } else {
+      await supabase
+        .from('settings')
+        .insert({
+          key: 'active_tab',
+          value: tabId,
+        });
+    }
+  } catch (error) {
+    console.error('Error saving active tab:', error);
+  }
+}
+
+/**
+ * Clear all data from Supabase
+ */
+export async function clearAllData(): Promise<void> {
+  try {
+    await supabase.from('tasks').delete().neq('id', '');
+    await supabase.from('developers').delete().neq('id', '');
+    await supabase.from('settings').delete().neq('key', '');
+  } catch (error) {
+    console.error('Error clearing data:', error);
+  }
+}
+
+/**
+ * Check if Supabase is configured
+ */
+export function isSupabaseConfigured(): boolean {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  return !!(url && key && url !== 'YOUR_SUPABASE_URL' && key !== 'YOUR_SUPABASE_ANON_KEY');
 }

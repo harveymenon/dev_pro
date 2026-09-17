@@ -31,11 +31,12 @@ import {
 } from './utils/developerUtils';
 import {
   saveDevelopers,
-  loadDevelopers,
+  fetchDevelopers,
   saveWorkingHours,
-  loadWorkingHours,
+  fetchWorkingHours,
   saveActiveTab,
-  loadActiveTab,
+  fetchActiveTab,
+  isSupabaseConfigured,
 } from './utils/storageUtils';
 import {
   exportDeveloperToExcel,
@@ -110,13 +111,11 @@ const SAMPLE_DEVELOPERS: Developer[] = [
 ];
 
 export default function App() {
-  // Load initial state from localStorage or use sample data
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Initialize state with sample data
   const [developers, setDevelopers] = useState<Developer[]>(() => {
-    const saved = loadDevelopers();
-    if (saved && saved.length > 0) {
-      return saved;
-    }
-    // Initialize sample data with calculated end dates
     return SAMPLE_DEVELOPERS.map(dev => ({
       ...dev,
       tasks: dev.tasks.map(task => {
@@ -127,11 +126,38 @@ export default function App() {
     }));
   });
 
-  const [workingHoursPerDay, setWorkingHoursPerDay] = useState<number>(() => loadWorkingHours());
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const saved = loadActiveTab();
-    return saved || 'overview';
-  });
+  const [workingHoursPerDay, setWorkingHoursPerDay] = useState<number>(8);
+  const [activeTab, setActiveTab] = useState<string>('overview');
+
+  // Load data from Supabase on mount
+  useEffect(() => {
+    const loadData = async () => {
+      if (isSupabaseConfigured()) {
+        try {
+          const [savedDevelopers, savedWorkingHours, savedActiveTab] = await Promise.all([
+            fetchDevelopers(),
+            fetchWorkingHours(),
+            fetchActiveTab(),
+          ]);
+
+          if (savedDevelopers.length > 0) {
+            setDevelopers(savedDevelopers);
+          }
+          
+          setWorkingHoursPerDay(savedWorkingHours);
+          
+          if (savedActiveTab) {
+            setActiveTab(savedActiveTab);
+          }
+        } catch (error) {
+          console.error('Error loading data from Supabase:', error);
+        }
+      }
+      setIsLoading(false);
+    };
+
+    loadData();
+  }, []);
 
   // Modal states
   const [showAddDeveloper, setShowAddDeveloper] = useState(false);
@@ -161,18 +187,24 @@ export default function App() {
   // Delete task confirmation
   const [deleteTaskConfirm, setDeleteTaskConfirm] = useState<{ devId: string; taskId: string } | null>(null);
 
-  // Save to localStorage whenever data changes
+  // Save to Supabase whenever data changes
   useEffect(() => {
-    saveDevelopers(developers);
-  }, [developers]);
+    if (!isLoading && isSupabaseConfigured()) {
+      saveDevelopers(developers);
+    }
+  }, [developers, isLoading]);
 
   useEffect(() => {
-    saveWorkingHours(workingHoursPerDay);
-  }, [workingHoursPerDay]);
+    if (!isLoading && isSupabaseConfigured()) {
+      saveWorkingHours(workingHoursPerDay);
+    }
+  }, [workingHoursPerDay, isLoading]);
 
   useEffect(() => {
-    saveActiveTab(activeTab);
-  }, [activeTab]);
+    if (!isLoading && isSupabaseConfigured()) {
+      saveActiveTab(activeTab);
+    }
+  }, [activeTab, isLoading]);
 
   // Recalculate all end dates when working hours change
   useEffect(() => {
@@ -739,6 +771,16 @@ export default function App() {
 
       {/* Main Content */}
       <main className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Loading State */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+              <p className="text-gray-600">Loading data...</p>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Summary Cards */}
         {activeTab === 'overview' ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -1068,6 +1110,8 @@ export default function App() {
               </table>
             </div>
           </div>
+        )}
+        </>
         )}
       </main>
     </div>
