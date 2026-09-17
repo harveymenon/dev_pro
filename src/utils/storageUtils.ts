@@ -1,11 +1,16 @@
 // Supabase storage utility functions
-import { supabase } from './supabaseClient';
+import { supabase, isSupabaseEnabled } from './supabaseClient';
 import { Developer, Task } from '../types';
 
 /**
  * Fetch all developers with their tasks from Supabase
  */
 export async function fetchDevelopers(): Promise<Developer[]> {
+  if (!supabase) {
+    console.warn('Supabase not configured, returning empty array');
+    return [];
+  }
+
   try {
     // Fetch all developers
     const { data: developers, error: devError } = await supabase
@@ -70,6 +75,11 @@ export async function fetchDevelopers(): Promise<Developer[]> {
  * This will sync the entire state with the database
  */
 export async function saveDevelopers(developers: Developer[]): Promise<void> {
+  if (!supabase) {
+    console.warn('Supabase not configured, skipping save');
+    return;
+  }
+
   try {
     // Get current developers from database
     const { data: existingDevelopers } = await supabase
@@ -123,6 +133,8 @@ export async function saveDevelopers(developers: Developer[]): Promise<void> {
  * Sync tasks for a specific developer
  */
 async function syncDeveloperTasks(developerId: string, tasks: Task[]): Promise<void> {
+  if (!supabase) return;
+
   try {
     // Get current tasks for this developer
     const { data: existingTasks } = await supabase
@@ -179,6 +191,10 @@ async function syncDeveloperTasks(developerId: string, tasks: Task[]): Promise<v
  * Fetch working hours per day from Supabase
  */
 export async function fetchWorkingHours(): Promise<number> {
+  if (!supabase) {
+    return 8; // Default value
+  }
+
   try {
     const { data, error } = await supabase
       .from('settings')
@@ -202,6 +218,8 @@ export async function fetchWorkingHours(): Promise<number> {
  * Save working hours per day to Supabase
  */
 export async function saveWorkingHours(hours: number): Promise<void> {
+  if (!supabase) return;
+
   try {
     const { data: existing } = await supabase
       .from('settings')
@@ -234,6 +252,10 @@ export async function saveWorkingHours(hours: number): Promise<void> {
  * Fetch active tab from Supabase
  */
 export async function fetchActiveTab(): Promise<string | null> {
+  if (!supabase) {
+    return null;
+  }
+
   try {
     const { data, error } = await supabase
       .from('settings')
@@ -256,6 +278,8 @@ export async function fetchActiveTab(): Promise<string | null> {
  * Save active tab to Supabase
  */
 export async function saveActiveTab(tabId: string): Promise<void> {
+  if (!supabase) return;
+
   try {
     const { data: existing } = await supabase
       .from('settings')
@@ -288,6 +312,8 @@ export async function saveActiveTab(tabId: string): Promise<void> {
  * Clear all data from Supabase
  */
 export async function clearAllData(): Promise<void> {
+  if (!supabase) return;
+
   try {
     await supabase.from('tasks').delete().neq('id', '');
     await supabase.from('developers').delete().neq('id', '');
@@ -301,7 +327,5 @@ export async function clearAllData(): Promise<void> {
  * Check if Supabase is configured
  */
 export function isSupabaseConfigured(): boolean {
-  const url = import.meta.env.VITE_SUPABASE_URL;
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  return !!(url && key && url !== 'YOUR_SUPABASE_URL' && key !== 'YOUR_SUPABASE_ANON_KEY');
+  return isSupabaseEnabled;
 }
