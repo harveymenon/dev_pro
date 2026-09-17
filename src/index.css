@@ -1,32 +1,27 @@
 @import "tailwindcss";
 
 /* Custom scrollbar for Gantt timeline */
-.gantt-timeline-scroll::-webkit-scrollbar {
+.overflow-x-auto::-webkit-scrollbar {
   height: 8px;
 }
 
-.gantt-timeline-scroll::-webkit-scrollbar-track {
+.overflow-x-auto::-webkit-scrollbar-track {
   background: #f1f5f9;
   border-radius: 4px;
 }
 
-.gantt-timeline-scroll::-webkit-scrollbar-thumb {
+.overflow-x-auto::-webkit-scrollbar-thumb {
   background: #94a3b8;
   border-radius: 4px;
 }
 
-.gantt-timeline-scroll::-webkit-scrollbar-thumb:hover {
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
   background: #64748b;
 }
 
 /* Ensure sticky columns have proper background */
 .sticky {
   background-clip: padding-box;
-}
-
-/* Table row hover inherits background */
-tr:hover td.sticky {
-  background-color: inherit;
 }
 
 /* Smooth transitions for Gantt bars */
@@ -93,11 +88,21 @@ input:focus {
 
 /* Print styles */
 @media print {
-  .gantt-timeline-scroll {
+  .overflow-x-auto {
     overflow: visible !important;
   }
-  
+
   .sticky {
     position: relative !important;
   }
+}
+
+/* Tab scrollbar */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 6px;
+}
+
+/* Table row hover inherits background */
+tr:hover td.sticky {
+  background-color: inherit;
 }
