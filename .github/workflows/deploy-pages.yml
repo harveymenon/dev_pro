@@ -27,7 +27,10 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          # Remove lock file to avoid platform-specific binding issues
+          rm -f package-lock.json
+          npm install
 
       - name: Build with Supabase credentials
         run: npm run build

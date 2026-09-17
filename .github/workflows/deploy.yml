@@ -20,7 +20,10 @@ jobs:
         node-version: '20.x'
 
     - name: Install dependencies
-      run: npm install
+      run: |
+        # Remove lock file to avoid platform-specific binding issues
+        rm -f package-lock.json
+        npm install
 
     - name: Run tests
       run: npm test
