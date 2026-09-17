@@ -4,8 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // Base path for GitHub Pages - change this to match your repository name
-  base: '/gantt-chart-planner/',
+  // Base path for GitHub Pages - matches repository name
+  base: '/dev_pro/',
   server: {
     host: "0.0.0.0",
     port: 3000,

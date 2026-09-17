@@ -48,9 +48,9 @@ GitHub Secrets keep your credentials secure and hidden from public view. They're
 
 ## 🔧 Step 2: Configure Vite for GitHub Pages
 
-### Update vite.config.js
+### vite.config.js Configuration
 
-Your `vite.config.js` needs to be configured for GitHub Pages:
+Your `vite.config.js` is already configured for GitHub Pages:
 
 ```javascript
 import { defineConfig } from "vite";
@@ -59,8 +59,8 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // Add this line for GitHub Pages
-  base: '/gantt-chart-planner/',
+  // Base path for GitHub Pages
+  base: '/dev_pro/',
   server: {
     host: "0.0.0.0",
     port: 3000,
@@ -76,7 +76,7 @@ export default defineConfig({
 });
 ```
 
-**Important:** Replace `/gantt-chart-planner/` with your actual repository name.
+The `base` path is set to `/dev_pro/` which matches your GitHub repository name.
 
 ## 🚀 Step 3: Create GitHub Pages Deployment Workflow
 
@@ -163,12 +163,11 @@ jobs:
 
 Your application will be available at:
 ```
-https://YOUR_USERNAME.github.io/gantt-chart-planner/
+https://YOUR_USERNAME.github.io/dev_pro/
 ```
 
 Replace:
 - `YOUR_USERNAME` with your GitHub username
-- `gantt-chart-planner` with your repository name
 
 ## ✅ Step 6: Verify Everything Works
 
@@ -207,7 +206,7 @@ Replace:
 
 **Solution:**
 - Check that `base` in `vite.config.js` matches your repository name
-- Example: If repo is `gantt-chart-planner`, base should be `/gantt-chart-planner/`
+- Example: If repo is `dev_pro`, base should be `/dev_pro/`
 
 ### Issue: Blank page after deployment
 

@@ -117,7 +117,7 @@ To host your app on GitHub Pages:
 3. Update `vite.config.js`:
    ```javascript
    export default defineConfig({
-     base: '/gantt-chart-planner/',
+     base: '/dev_pro/',
      // ... rest of config
    })
    ```
@@ -128,7 +128,7 @@ To host your app on GitHub Pages:
    ```
 5. Go to **Settings** → **Pages**
 6. Select **gh-pages** branch
-7. Your site will be live at: `https://YOUR_USERNAME.github.io/gantt-chart-planner/`
+7. Your site will be live at: `https://YOUR_USERNAME.github.io/dev_pro/`
 
 ## 📊 Using GitHub Features
 

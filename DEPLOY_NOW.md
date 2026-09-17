@@ -27,12 +27,12 @@ Name: VITE_SUPABASE_ANON_KEY
 Value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-### 2. Update Repository Name
+### 2. Repository Name (Already Configured ✓)
 
-Edit `vite.config.js` and change:
+The `vite.config.js` is already configured with your repository name:
 
 ```javascript
-base: '/gantt-chart-planner/',  // ← Change to YOUR repo name
+base: '/dev_pro/',  // ← Already set to your repo name
 ```
 
 ### 3. Push to GitHub
@@ -52,7 +52,7 @@ git push origin main
 
 Your site will be live at:
 ```
-https://YOUR-USERNAME.github.io/YOUR-REPOSITORY-NAME/
+https://YOUR-USERNAME.github.io/dev_pro/
 ```
 
 ## 📚 Documentation Files
@@ -135,7 +135,7 @@ Your Gantt Chart Planner is fully configured for deployment. Follow the 5-minute
 
 **Your live site will be at:**
 ```
-https://YOUR-USERNAME.github.io/YOUR-REPOSITORY-NAME/
+https://YOUR-USERNAME.github.io/dev_pro/
 ```
 
 ---
