@@ -204,6 +204,7 @@ export default function App() {
     jiraUrl: '',
     hours: 40,
     startDate: '2026-01-05',
+    endDate: '2026-01-12',
     assignedDeveloperId: null as string | null,
   });
   const [taskIdError, setTaskIdError] = useState('');
@@ -331,8 +332,9 @@ export default function App() {
       jiraUrl: taskForm.jiraUrl,
       hours: taskForm.hours,
       startDate: taskForm.startDate,
+      endDate: taskForm.endDate,
       assignedDeveloperId: taskForm.assignedDeveloperId,
-    }, workingHoursPerDay));
+    }));
 
     setTaskForm({
       id: '',
@@ -341,6 +343,7 @@ export default function App() {
       jiraUrl: '',
       hours: 40,
       startDate: '2026-01-05',
+      endDate: '2026-01-12',
       assignedDeveloperId: null,
     });
     setShowAddTask(false);
@@ -371,8 +374,9 @@ export default function App() {
       jiraUrl: taskForm.jiraUrl,
       hours: taskForm.hours,
       startDate: taskForm.startDate,
+      endDate: taskForm.endDate,
       assignedDeveloperId: taskForm.assignedDeveloperId,
-    }, workingHoursPerDay));
+    }));
 
     setEditingTask(null);
     setTaskForm({
@@ -382,6 +386,7 @@ export default function App() {
       jiraUrl: '',
       hours: 40,
       startDate: '2026-01-05',
+      endDate: '2026-01-12',
       assignedDeveloperId: null,
     });
     setTaskIdError('');
@@ -418,6 +423,7 @@ export default function App() {
       jiraUrl: task.jiraUrl,
       hours: task.hours,
       startDate: task.startDate,
+      endDate: task.endDate,
       assignedDeveloperId: task.assignedDeveloperId,
     });
     setTaskIdError('');
@@ -433,6 +439,7 @@ export default function App() {
       jiraUrl: '',
       hours: 40,
       startDate: '2026-01-05',
+      endDate: '2026-01-12',
       assignedDeveloperId: defaultDeveloperId || null,
     });
     setTaskIdError('');
@@ -906,6 +913,121 @@ export default function App() {
             <div className="flex justify-end gap-3">
               <button onClick={() => setAssigningTaskId(null)} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg">Cancel</button>
               <button onClick={handleAssignTask} className="px-4 py-2 text-white bg-blue-600 rounded-lg">Assign</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Task Modal */}
+      {(showAddTask || editingTask) && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-4">
+              {editingTask ? 'Edit Task' : 'Add New Task'}
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Task ID</label>
+                <input
+                  type="text"
+                  value={taskForm.id}
+                  onChange={(e) => setTaskForm({ ...taskForm, id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+                {taskIdError && <p className="text-red-600 text-xs mt-1">{taskIdError}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Task Title</label>
+                <input
+                  type="text"
+                  value={taskForm.title}
+                  onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                  placeholder="Enter task title..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                <input
+                  type="text"
+                  value={taskForm.project}
+                  onChange={(e) => setTaskForm({ ...taskForm, project: e.target.value })}
+                  placeholder="Enter project name..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Jira URL</label>
+                <input
+                  type="url"
+                  value={taskForm.jiraUrl}
+                  onChange={(e) => setTaskForm({ ...taskForm, jiraUrl: e.target.value })}
+                  placeholder="https://jira.company.com/browse/PROJ-123"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+                {jiraUrlError && <p className="text-red-600 text-xs mt-1">{jiraUrlError}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Hours (for record-keeping)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={taskForm.hours}
+                  onChange={(e) => setTaskForm({ ...taskForm, hours: Math.max(1, parseInt(e.target.value) || 1) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={taskForm.startDate}
+                  onChange={(e) => setTaskForm({ ...taskForm, startDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={taskForm.endDate}
+                  onChange={(e) => setTaskForm({ ...taskForm, endDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assign to Developer</label>
+                <select
+                  value={taskForm.assignedDeveloperId || ''}
+                  onChange={(e) => setTaskForm({ ...taskForm, assignedDeveloperId: e.target.value || null })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                  <option value="">Backlog (Unassigned)</option>
+                  {developers.map(dev => (
+                    <option key={dev.id} value={dev.id}>{dev.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddTask(false);
+                  setEditingTask(null);
+                  setTaskIdError('');
+                  setJiraUrlError('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={editingTask ? handleUpdateTask : handleAddTask}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              >
+                {editingTask ? 'Update Task' : 'Create Task'}
+              </button>
             </div>
           </div>
         </div>

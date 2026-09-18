@@ -122,18 +122,9 @@ export function deleteDeveloper(developers: Developer[], tasks: Task[], devId: s
  */
 export function createTask(
   tasks: Task[],
-  taskData: Omit<Task, 'endDate'>,
-  workingHoursPerDay: number
+  taskData: Task
 ): Task[] {
-  const startDate = parseDate(taskData.startDate);
-  const endDate = calculateEndDate(startDate, taskData.hours, workingHoursPerDay);
-
-  const newTask: Task = {
-    ...taskData,
-    endDate: formatDateISO(endDate),
-  };
-
-  return [...tasks, newTask];
+  return [...tasks, taskData];
 }
 
 /**
@@ -142,18 +133,13 @@ export function createTask(
 export function updateTask(
   tasks: Task[],
   taskId: string,
-  updates: Partial<Omit<Task, 'endDate'>>,
-  workingHoursPerDay: number
+  updates: Partial<Task>
 ): Task[] {
   return tasks.map(task => {
     if (task.id !== taskId) return task;
-    const updatedTask = { ...task, ...updates };
-    const startDate = parseDate(updatedTask.startDate);
-    const endDate = calculateEndDate(startDate, updatedTask.hours, workingHoursPerDay);
-    return { ...updatedTask, endDate: formatDateISO(endDate) };
+    return { ...task, ...updates };
   });
 }
-
 /**
  * Delete a task
  */
