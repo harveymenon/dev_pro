@@ -223,6 +223,13 @@ async function saveTasks(tasks: Task[]): Promise<void> {
       // This ensures we never send null to a NOT NULL column
       const developerId = task.assignedDeveloperId || '';
       
+      console.log('📝 Processing task:', task.id, {
+        assignedDeveloperId: task.assignedDeveloperId,
+        developerId: developerId,
+        developerIdType: typeof developerId,
+        developerIdIsEmpty: developerId === ''
+      });
+      
       if (existingIds.has(task.id)) {
         const updateData: any = {
           title: task.title,
@@ -236,6 +243,8 @@ async function saveTasks(tasks: Task[]): Promise<void> {
           updated_at: new Date().toISOString(),
         };
         
+        console.log('🔄 Updating task', task.id, 'with data:', updateData);
+        
         const { error: updateError } = await supabase
           .from('tasks')
           .update(updateData)
@@ -244,6 +253,7 @@ async function saveTasks(tasks: Task[]): Promise<void> {
         if (updateError) {
           console.error('❌ Error updating task', task.id, ':', updateError);
         } else {
+          console.log('✅ Updated task', task.id);
           updated++;
         }
       } else {
@@ -259,6 +269,8 @@ async function saveTasks(tasks: Task[]): Promise<void> {
           developer_id: developerId, // backward compatibility
         };
         
+        console.log('📥 Inserting task', task.id, 'with data:', insertData);
+        
         const { error: insertError } = await supabase
           .from('tasks')
           .insert(insertData);
@@ -266,6 +278,7 @@ async function saveTasks(tasks: Task[]): Promise<void> {
         if (insertError) {
           console.error('❌ Error inserting task', task.id, ':', insertError);
         } else {
+          console.log('✅ Inserted task', task.id);
           inserted++;
         }
       }
