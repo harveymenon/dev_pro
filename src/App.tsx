@@ -191,6 +191,16 @@ export default function App() {
         projects: projects.length,
         workingHoursPerDay
       });
+      
+      // Log the first task's dates to track state changes
+      if (tasks.length > 0) {
+        console.log('📊 Current tasks state - first task:', {
+          id: tasks[0].id,
+          startDate: tasks[0].startDate,
+          endDate: tasks[0].endDate
+        });
+      }
+      
       const appState: AppState = {
         workingHoursPerDay,
         developers,
@@ -247,6 +257,14 @@ export default function App() {
 
   // Get processed tasks
   const processedTasks = useMemo(() => {
+    console.log('🔄 processedTasks recalculating with', tasks.length, 'tasks');
+    if (tasks.length > 0) {
+      console.log('📋 First task dates:', {
+        id: tasks[0].id,
+        startDate: tasks[0].startDate,
+        endDate: tasks[0].endDate
+      });
+    }
     return getProcessedTasks(tasks, developers, workingHoursPerDay);
   }, [tasks, developers, workingHoursPerDay]);
 

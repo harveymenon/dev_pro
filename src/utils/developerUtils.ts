@@ -135,10 +135,25 @@ export function updateTask(
   taskId: string,
   updates: Partial<Task>
 ): Task[] {
-  return tasks.map(task => {
-    if (task.id !== taskId) return task;
-    return { ...task, ...updates };
+  console.log('🔧 updateTask called for', taskId, 'with updates:', {
+    startDate: updates.startDate,
+    endDate: updates.endDate
   });
+  
+  const result = tasks.map(task => {
+    if (task.id !== taskId) return task;
+    const updated = { ...task, ...updates };
+    console.log('✅ Task', taskId, 'updated from', {
+      old_start: task.startDate,
+      old_end: task.endDate
+    }, 'to', {
+      new_start: updated.startDate,
+      new_end: updated.endDate
+    });
+    return updated;
+  });
+  
+  return result;
 }
 /**
  * Delete a task
