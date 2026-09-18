@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar for Gantt timeline */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 8px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Ensure sticky columns have proper background */
+.sticky {
+  background-clip: padding-box;
+}
+
+/* Smooth transitions for Gantt bars */
+.gantt-bar {
+  transition: all 0.2s ease;
+}
+
+/* Custom focus styles */
+input:focus {
+  outline: none;
+}
+
+/* Modal animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fixed {
+  animation: fadeIn 0.15s ease-out;
+}
+
+.fixed > div {
+  animation: slideUp 0.2s ease-out;
+}
+
+/* Tooltip animation */
+@keyframes tooltipFade {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -90%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+}
+
+.pointer-events-none {
+  animation: tooltipFade 0.15s ease-out;
+}
+
+/* Ensure proper sticky positioning */
+@media (max-width: 640px) {
+  .sticky {
+    position: sticky;
+  }
+}
+
+/* Print styles */
+@media print {
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  .sticky {
+    position: relative !important;
+  }
+}
+
+/* Tab scrollbar */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 6px;
+}
+
+/* Table row hover inherits background */
+tr:hover td.sticky {
+  background-color: inherit;
+}
