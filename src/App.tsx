@@ -388,6 +388,13 @@ export default function App() {
       return;
     }
 
+    console.log('🔄 handleUpdateTask called with dates:', {
+      startDate: taskForm.startDate,
+      endDate: taskForm.endDate,
+      startDate_type: typeof taskForm.startDate,
+      endDate_type: typeof taskForm.endDate
+    });
+    
     setTasks(prev => updateTask(prev, editingTask, {
       id: taskForm.id,
       title: taskForm.title,
@@ -436,6 +443,13 @@ export default function App() {
 
   // Handle open edit task modal
   const handleOpenEditTask = useCallback((task: ProcessedTask) => {
+    console.log('📝 Opening edit modal for task:', task.id, {
+      startDate: task.startDate,
+      endDate: task.endDate,
+      startDate_type: typeof task.startDate,
+      endDate_type: typeof task.endDate
+    });
+    
     setEditingTask(task.id);
     setTaskForm({
       id: task.id,

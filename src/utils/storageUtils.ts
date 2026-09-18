@@ -57,16 +57,25 @@ export async function fetchAppState(): Promise<AppState | null> {
     const projectsData = settingsData?.find(s => s.key === 'projects')?.value || '[]';
 
     // Transform tasks from Supabase format to app format
-    const transformedTasks: Task[] = (tasks || []).map((task: any) => ({
-      id: task.id,
-      title: task.title || 'Untitled Task',
-      project: task.project || '',
-      jiraUrl: task.jira_url || '',
-      hours: task.hours || 0,
-      startDate: task.start_date || new Date().toISOString().split('T')[0],
-      endDate: task.end_date || new Date().toISOString().split('T')[0],
-      assignedDeveloperId: task.assigned_developer_id || null,
-    }));
+    const transformedTasks: Task[] = (tasks || []).map((task: any) => {
+      console.log('📥 Loading task from Supabase:', task.id, {
+        start_date: task.start_date,
+        end_date: task.end_date,
+        start_date_type: typeof task.start_date,
+        end_date_type: typeof task.end_date
+      });
+      
+      return {
+        id: task.id,
+        title: task.title || 'Untitled Task',
+        project: task.project || '',
+        jiraUrl: task.jira_url || '',
+        hours: task.hours || 0,
+        startDate: task.start_date || new Date().toISOString().split('T')[0],
+        endDate: task.end_date || new Date().toISOString().split('T')[0],
+        assignedDeveloperId: task.assigned_developer_id || null,
+      };
+    });
 
     const appState = {
       workingHoursPerDay: parseInt(workingHoursPerDay, 10),
@@ -243,7 +252,13 @@ async function saveTasks(tasks: Task[]): Promise<void> {
           updated_at: new Date().toISOString(),
         };
         
-        console.log('🔄 Updating task', task.id, 'with data:', updateData);
+        console.log('🔄 Updating task', task.id, {
+          start_date: task.startDate,
+          end_date: task.endDate,
+          start_date_type: typeof task.startDate,
+          end_date_type: typeof task.endDate,
+          full_update_data: updateData
+        });
         
         const { error: updateError } = await supabase
           .from('tasks')
@@ -269,7 +284,13 @@ async function saveTasks(tasks: Task[]): Promise<void> {
           developer_id: developerId, // backward compatibility
         };
         
-        console.log('📥 Inserting task', task.id, 'with data:', insertData);
+        console.log('📥 Inserting task', task.id, {
+          start_date: task.startDate,
+          end_date: task.endDate,
+          start_date_type: typeof task.startDate,
+          end_date_type: typeof task.endDate,
+          full_insert_data: insertData
+        });
         
         const { error: insertError } = await supabase
           .from('tasks')
