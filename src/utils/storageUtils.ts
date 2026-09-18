@@ -6,43 +6,51 @@ import { Developer, Task, AppState } from '../types';
  * Fetch complete app state from Supabase
  */
 export async function fetchAppState(): Promise<AppState | null> {
+  console.log('📡 Fetching app state from Supabase...');
+  
   if (!supabase) {
-    console.warn('Supabase not configured, returning null');
+    console.warn('⚠️ Supabase not configured, returning null');
     return null;
   }
 
   try {
     // Fetch developers
+    console.log('📡 Fetching developers...');
     const { data: developers, error: devError } = await supabase
       .from('developers')
       .select('*')
       .order('created_at', { ascending: true });
 
     if (devError) {
-      console.error('Error fetching developers:', devError);
+      console.error('❌ Error fetching developers:', devError);
       return null;
     }
+    console.log('✅ Fetched', developers?.length || 0, 'developers');
 
     // Fetch tasks
+    console.log('📡 Fetching tasks...');
     const { data: tasks, error: taskError } = await supabase
       .from('tasks')
       .select('*')
       .order('created_at', { ascending: true });
 
     if (taskError) {
-      console.error('Error fetching tasks:', taskError);
+      console.error('❌ Error fetching tasks:', taskError);
       return null;
     }
+    console.log('✅ Fetched', tasks?.length || 0, 'tasks');
 
     // Fetch settings
+    console.log('📡 Fetching settings...');
     const { data: settingsData, error: settingsError } = await supabase
       .from('settings')
       .select('*');
 
     if (settingsError) {
-      console.error('Error fetching settings:', settingsError);
+      console.error('❌ Error fetching settings:', settingsError);
       return null;
     }
+    console.log('✅ Fetched settings:', settingsData?.length || 0, 'entries');
 
     // Parse settings
     const workingHoursPerDay = settingsData?.find(s => s.key === 'working_hours_per_day')?.value || '8';
@@ -60,14 +68,23 @@ export async function fetchAppState(): Promise<AppState | null> {
       assignedDeveloperId: task.assigned_developer_id || null,
     }));
 
-    return {
+    const appState = {
       workingHoursPerDay: parseInt(workingHoursPerDay, 10),
       developers: developers || [],
       tasks: transformedTasks,
       projects: JSON.parse(projectsData),
     };
+
+    console.log('✅ App state fetched successfully:', {
+      developers: appState.developers.length,
+      tasks: appState.tasks.length,
+      projects: appState.projects.length,
+      workingHoursPerDay: appState.workingHoursPerDay
+    });
+
+    return appState;
   } catch (error) {
-    console.error('Error in fetchAppState:', error);
+    console.error('❌ Error in fetchAppState:', error);
     return null;
   }
 }
@@ -80,6 +97,8 @@ export async function saveAppState(appState: AppState): Promise<void> {
   console.log('  - Supabase client:', supabase ? '✓ Available' : '✗ Not available');
   console.log('  - Developers:', appState.developers.length);
   console.log('  - Tasks:', appState.tasks.length);
+  console.log('  - Working Hours:', appState.workingHoursPerDay);
+  console.log('  - Projects:', appState.projects.length);
 
   if (!supabase) {
     console.warn('⚠️ Supabase not configured, skipping save');
@@ -87,17 +106,17 @@ export async function saveAppState(appState: AppState): Promise<void> {
   }
 
   try {
-    // Save developers
+    console.log('🔄 Saving developers...');
     await saveDevelopers(appState.developers);
 
-    // Save tasks
+    console.log('🔄 Saving tasks...');
     await saveTasks(appState.tasks);
 
-    // Save settings
+    console.log('🔄 Saving settings...');
     await saveWorkingHours(appState.workingHoursPerDay);
     await saveProjects(appState.projects);
 
-    console.log('✅ App state saved successfully');
+    console.log('✅ App state saved successfully to Supabase');
   } catch (error) {
     console.error('❌ Error saving app state:', error);
   }
@@ -157,30 +176,50 @@ async function saveDevelopers(developers: Developer[]): Promise<void> {
  * Save tasks to Supabase
  */
 async function saveTasks(tasks: Task[]): Promise<void> {
-  if (!supabase) return;
+  console.log('💾 Saving tasks to Supabase...', tasks.length, 'tasks');
+  
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, skipping task save');
+    return;
+  }
 
   try {
     // Get current tasks
-    const { data: existingTasks } = await supabase
+    const { data: existingTasks, error: fetchError } = await supabase
       .from('tasks')
       .select('id');
+
+    if (fetchError) {
+      console.error('❌ Error fetching existing tasks:', fetchError);
+      return;
+    }
 
     const existingIds = new Set(existingTasks?.map((t: any) => t.id) || []);
     const currentIds = new Set(tasks.map(t => t.id));
 
+    console.log('📊 Existing tasks:', existingIds.size, 'Current tasks:', currentIds.size);
+
     // Delete removed tasks
     const toDelete = Array.from(existingIds).filter(id => !currentIds.has(id));
     if (toDelete.length > 0) {
-      await supabase
+      console.log('🗑️ Deleting', toDelete.length, 'removed tasks');
+      const { error: deleteError } = await supabase
         .from('tasks')
         .delete()
         .in('id', toDelete);
+      
+      if (deleteError) {
+        console.error('❌ Error deleting tasks:', deleteError);
+      }
     }
 
     // Upsert tasks
+    let inserted = 0;
+    let updated = 0;
+    
     for (const task of tasks) {
       if (existingIds.has(task.id)) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('tasks')
           .update({
             title: task.title,
@@ -193,8 +232,14 @@ async function saveTasks(tasks: Task[]): Promise<void> {
             updated_at: new Date().toISOString(),
           })
           .eq('id', task.id);
+        
+        if (updateError) {
+          console.error('❌ Error updating task', task.id, ':', updateError);
+        } else {
+          updated++;
+        }
       } else {
-        await supabase
+        const { error: insertError } = await supabase
           .from('tasks')
           .insert({
             id: task.id,
@@ -206,10 +251,18 @@ async function saveTasks(tasks: Task[]): Promise<void> {
             end_date: task.endDate,
             assigned_developer_id: task.assignedDeveloperId,
           });
+        
+        if (insertError) {
+          console.error('❌ Error inserting task', task.id, ':', insertError);
+        } else {
+          inserted++;
+        }
       }
     }
+    
+    console.log('✅ Tasks saved successfully - Inserted:', inserted, 'Updated:', updated);
   } catch (error) {
-    console.error('Error saving tasks:', error);
+    console.error('❌ Error in saveTasks:', error);
   }
 }
 

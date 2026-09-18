@@ -136,31 +136,46 @@ export default function App() {
   const [workingHoursPerDay, setWorkingHoursPerDay] = useState<number>(8);
   const [activeTab, setActiveTab] = useState<string>('overview');
 
-  // Initialize state with sample data
+  // Initialize state with sample data or load from Supabase
   useEffect(() => {
     const initSampleData = async () => {
-      // Calculate end dates for sample tasks
+      console.log('🚀 Initializing app...');
+      
+      // Try to load from Supabase first
+      if (isSupabaseConfigured()) {
+        console.log('📡 Supabase is configured, attempting to load data...');
+        try {
+          const appState = await fetchAppState();
+          if (appState && (appState.developers.length > 0 || appState.tasks.length > 0)) {
+            console.log('✅ Loaded data from Supabase:', {
+              developers: appState.developers.length,
+              tasks: appState.tasks.length,
+              projects: appState.projects.length
+            });
+            setDevelopers(appState.developers);
+            setTasks(appState.tasks);
+            setProjects(appState.projects.length > 0 ? appState.projects : DEFAULT_PROJECTS);
+            setWorkingHoursPerDay(appState.workingHoursPerDay);
+            setIsLoading(false);
+            return;
+          } else {
+            console.log('⚠️ Supabase is empty or returned no data, using sample data');
+          }
+        } catch (error) {
+          console.error('❌ Error loading from Supabase:', error);
+        }
+      } else {
+        console.log('⚠️ Supabase not configured, using sample data');
+      }
+
+      // Use sample data if Supabase is not configured or has no data
+      console.log('📦 Loading sample data...');
       const tasksWithEndDates = SAMPLE_TASKS.map(task => {
         const start = parseDate(task.startDate);
         const end = calculateEndDate(start, task.hours, 8);
         return { ...task, endDate: formatDateISO(end) };
       });
       setTasks(tasksWithEndDates);
-
-      // Try to load from Supabase
-      if (isSupabaseConfigured()) {
-        try {
-          const appState = await fetchAppState();
-          if (appState) {
-            setDevelopers(appState.developers);
-            setTasks(appState.tasks);
-            setProjects(appState.projects.length > 0 ? appState.projects : DEFAULT_PROJECTS);
-            setWorkingHoursPerDay(appState.workingHoursPerDay);
-          }
-        } catch (error) {
-          console.error('Error loading from Supabase:', error);
-        }
-      }
       setIsLoading(false);
     };
 
@@ -170,6 +185,12 @@ export default function App() {
   // Save to Supabase whenever state changes
   useEffect(() => {
     if (!isLoading && isSupabaseConfigured()) {
+      console.log('🔄 State changed, saving to Supabase...', {
+        developers: developers.length,
+        tasks: tasks.length,
+        projects: projects.length,
+        workingHoursPerDay
+      });
       const appState: AppState = {
         workingHoursPerDay,
         developers,
