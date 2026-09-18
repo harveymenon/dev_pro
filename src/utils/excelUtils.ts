@@ -1,6 +1,6 @@
 // Excel export utility functions using SheetJS (xlsx)
 import * as XLSX from 'xlsx';
-import { Developer, ProcessedTask, DeveloperSummary, ProjectSummary, MonthColumn } from '../types';
+import { Developer, Task, ProcessedTask, DeveloperSummary, ProjectSummary, BacklogSummary, MonthColumn } from '../types';
 import {
   formatDateExcel,
   generateMonthsBetween,
@@ -8,12 +8,16 @@ import {
   calculateWorkingDays,
   sanitizeFilename,
   getDaysInMonth,
+  parseDate,
 } from './dateUtils';
 import {
-  getProcessedTasksForDeveloper,
-  getAllProcessedTasks,
+  getProcessedTasks,
+  getDeveloperTasks,
+  getBacklogTasks,
   calculateDeveloperSummary,
   calculateProjectSummary,
+  calculateBacklogSummary,
+  extractJiraTicketId,
 } from './developerUtils';
 
 // Excel styling helpers
@@ -27,13 +31,6 @@ const HEADER_STYLE = {
     left: { style: 'thin', color: { rgb: '000000' } },
     right: { style: 'thin', color: { rgb: '000000' } },
   },
-};
-
-const CELL_BORDER = {
-  top: { style: 'thin', color: { rgb: 'CCCCCC' } },
-  bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
-  left: { style: 'thin', color: { rgb: 'CCCCCC' } },
-  right: { style: 'thin', color: { rgb: 'CCCCCC' } },
 };
 
 /**
@@ -57,18 +54,15 @@ function createSummarySheet(developer: Developer, summary: DeveloperSummary, wor
 
   const ws = XLSX.utils.aoa_to_sheet(data);
 
-  // Set column widths
   ws['!cols'] = [
     { wch: 25 },
     { wch: 20 },
   ];
 
-  // Style the title
   if (ws['A1']) {
     ws['A1'].s = { font: { bold: true, sz: 16, color: { rgb: '4F46E5' } } };
   }
 
-  // Style header row
   for (const cell of ['A5', 'B5']) {
     if (ws[cell]) {
       ws[cell].s = HEADER_STYLE;
@@ -83,14 +77,22 @@ function createSummarySheet(developer: Developer, summary: DeveloperSummary, wor
  */
 function createGanttSheet(
   developer: Developer,
-  tasks: ProcessedTask[],
+  tasks: Task[],
+  allTasks: Task[],
+  developers: Developer[],
   monthColumns: MonthColumn[],
   workingHoursPerDay: number
 ): XLSX.WorkSheet {
-  // Build header row
+  // Get processed tasks for this developer
+  const processedTasks = getProcessedTasks(tasks, developers, workingHoursPerDay)
+    .filter(t => t.assignedDeveloperId === developer.id);
+
+  // Build header row with new fields
   const headers = [
     'Task ID',
     'Task Title',
+    'Project',
+    'Jira URL',
     'Hours',
     'Start Date',
     'End Date',
@@ -98,13 +100,14 @@ function createGanttSheet(
     ...monthColumns.map(mc => mc.label),
   ];
 
-  // Build data rows
   const data: (string | number)[][] = [headers];
 
-  for (const task of tasks) {
+  for (const task of processedTasks) {
     const row: (string | number)[] = [
       task.id,
       task.title,
+      task.project,
+      task.jiraUrl ? extractJiraTicketId(task.jiraUrl) : '',
       task.hours,
       formatDateExcel(task.startDateObj),
       formatDateExcel(task.endDateObj),
@@ -117,7 +120,6 @@ function createGanttSheet(
       const monthEnd = new Date(mc.year, mc.month + 1, 0);
       const daysInMonth = getDaysInMonth(mc.year, mc.month);
 
-      // Check if task overlaps with this month
       if (task.startDateObj <= monthEnd && task.endDateObj >= monthStart) {
         const barStart = task.startDateObj > monthStart ? task.startDateObj : monthStart;
         const barEnd = task.endDateObj < monthEnd ? task.endDateObj : monthEnd;
@@ -136,10 +138,11 @@ function createGanttSheet(
 
   const ws = XLSX.utils.aoa_to_sheet(data);
 
-  // Set column widths
   const cols = [
     { wch: 12 },  // Task ID
     { wch: 30 },  // Task Title
+    { wch: 20 },  // Project
+    { wch: 15 },  // Jira URL
     { wch: 8 },   // Hours
     { wch: 14 },  // Start Date
     { wch: 14 },  // End Date
@@ -156,10 +159,73 @@ function createGanttSheet(
     }
   }
 
-  // Set freeze panes (freeze header row and first column)
   ws['!freeze'] = { xSplit: 1, ySplit: 1 };
 
-  // Set auto-filter
+  ws['!autofilter'] = {
+    ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length - 1, c: headers.length - 1 } }),
+  };
+
+  return ws;
+}
+
+/**
+ * Create a backlog sheet
+ */
+function createBacklogSheet(
+  tasks: Task[],
+  developers: Developer[],
+  workingHoursPerDay: number
+): XLSX.WorkSheet {
+  const processedTasks = getProcessedTasks(tasks, developers, workingHoursPerDay)
+    .filter(t => t.assignedDeveloperId === null);
+
+  const headers = [
+    'Task ID',
+    'Task Title',
+    'Project',
+    'Jira URL',
+    'Hours',
+    'Start Date',
+    'End Date',
+    'Working Days',
+  ];
+
+  const data: (string | number)[][] = [headers];
+
+  for (const task of processedTasks) {
+    data.push([
+      task.id,
+      task.title,
+      task.project,
+      task.jiraUrl || '',
+      task.hours,
+      formatDateExcel(task.startDateObj),
+      formatDateExcel(task.endDateObj),
+      task.workingDays,
+    ]);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+
+  ws['!cols'] = [
+    { wch: 12 },
+    { wch: 30 },
+    { wch: 20 },
+    { wch: 30 },
+    { wch: 8 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 12 },
+  ];
+
+  for (let i = 0; i < headers.length; i++) {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c: i });
+    if (ws[cellRef]) {
+      ws[cellRef].s = HEADER_STYLE;
+    }
+  }
+
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
   ws['!autofilter'] = {
     ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length - 1, c: headers.length - 1 } }),
   };
@@ -171,13 +237,20 @@ function createGanttSheet(
  * Create a consolidated Gantt sheet for all developers
  */
 function createConsolidatedGanttSheet(
-  allTasks: ProcessedTask[],
-  monthColumns: MonthColumn[]
+  tasks: Task[],
+  developers: Developer[],
+  monthColumns: MonthColumn[],
+  workingHoursPerDay: number
 ): XLSX.WorkSheet {
+  const processedTasks = getProcessedTasks(tasks, developers, workingHoursPerDay)
+    .filter(t => t.assignedDeveloperId !== null);
+
   const headers = [
     'Developer',
     'Task ID',
     'Task Title',
+    'Project',
+    'Jira URL',
     'Hours',
     'Start Date',
     'End Date',
@@ -187,11 +260,13 @@ function createConsolidatedGanttSheet(
 
   const data: (string | number)[][] = [headers];
 
-  for (const task of allTasks) {
+  for (const task of processedTasks) {
     const row: (string | number)[] = [
-      task.developerName,
+      task.developerName || '',
       task.id,
       task.title,
+      task.project,
+      task.jiraUrl ? extractJiraTicketId(task.jiraUrl) : '',
       task.hours,
       formatDateExcel(task.startDateObj),
       formatDateExcel(task.endDateObj),
@@ -225,6 +300,8 @@ function createConsolidatedGanttSheet(
     { wch: 15 },  // Developer
     { wch: 12 },  // Task ID
     { wch: 30 },  // Task Title
+    { wch: 20 },  // Project
+    { wch: 15 },  // Jira URL
     { wch: 8 },   // Hours
     { wch: 14 },  // Start Date
     { wch: 14 },  // End Date
@@ -233,7 +310,6 @@ function createConsolidatedGanttSheet(
   ];
   ws['!cols'] = cols;
 
-  // Style header row
   for (let i = 0; i < headers.length; i++) {
     const cellRef = XLSX.utils.encode_cell({ r: 0, c: i });
     if (ws[cellRef]) {
@@ -242,7 +318,6 @@ function createConsolidatedGanttSheet(
   }
 
   ws['!freeze'] = { xSplit: 2, ySplit: 1 };
-
   ws['!autofilter'] = {
     ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length - 1, c: headers.length - 1 } }),
   };
@@ -255,6 +330,7 @@ function createConsolidatedGanttSheet(
  */
 function createProjectSummarySheet(
   developers: Developer[],
+  tasks: Task[],
   projectSummary: ProjectSummary,
   workingHoursPerDay: number
 ): XLSX.WorkSheet {
@@ -265,7 +341,10 @@ function createProjectSummarySheet(
     ['', ''],
     ['Total Developers:', projectSummary.totalDevelopers],
     ['Total Tasks:', projectSummary.totalTasks],
+    ['Assigned Tasks:', projectSummary.assignedTasks],
+    ['Backlog Tasks:', projectSummary.backlogTasks],
     ['Total Hours:', projectSummary.totalHours],
+    ['Backlog Hours:', projectSummary.backlogHours],
     ['', ''],
     ['Project Start:', projectSummary.projectStart ? formatDateExcel(projectSummary.projectStart) : 'N/A'],
     ['Project End:', projectSummary.projectEnd ? formatDateExcel(projectSummary.projectEnd) : 'N/A'],
@@ -276,7 +355,7 @@ function createProjectSummarySheet(
 
   // Add per-developer summaries
   for (const dev of developers) {
-    const summary = calculateDeveloperSummary(dev, workingHoursPerDay);
+    const summary = calculateDeveloperSummary(tasks, dev.id, workingHoursPerDay);
     data.push([
       dev.name,
       summary.totalTasks,
@@ -298,13 +377,11 @@ function createProjectSummarySheet(
     { wch: 15 },
   ];
 
-  // Style title
   if (ws['A1']) {
     ws['A1'].s = { font: { bold: true, sz: 16, color: { rgb: '4F46E5' } } };
   }
 
-  // Style developer summary header row (row 12, 0-indexed)
-  const headerRow = 12;
+  const headerRow = 15;
   for (let i = 0; i < 6; i++) {
     const cellRef = XLSX.utils.encode_cell({ r: headerRow, c: i });
     if (ws[cellRef]) {
@@ -320,13 +397,14 @@ function createProjectSummarySheet(
  */
 export function exportDeveloperToExcel(
   developer: Developer,
+  tasks: Task[],
+  developers: Developer[],
   workingHoursPerDay: number
 ): void {
-  const tasks = getProcessedTasksForDeveloper(developer, workingHoursPerDay);
-  const summary = calculateDeveloperSummary(developer, workingHoursPerDay);
+  const devTasks = getDeveloperTasks(tasks, developer.id);
+  const summary = calculateDeveloperSummary(tasks, developer.id, workingHoursPerDay);
 
-  // Calculate timeline range
-  const dateTasks = tasks.map(t => ({ startDate: t.startDateObj, endDate: t.endDateObj }));
+  const dateTasks = devTasks.map(t => ({ startDate: parseDate(t.startDate), endDate: parseDate(t.endDate) }));
   const range = calculateTimelineRange(dateTasks);
 
   let monthColumns: MonthColumn[] = [];
@@ -334,21 +412,15 @@ export function exportDeveloperToExcel(
     monthColumns = generateMonthsBetween(range.start, range.end);
   }
 
-  // Create workbook
   const wb = XLSX.utils.book_new();
 
-  // Add Gantt sheet
-  const ganttSheet = createGanttSheet(developer, tasks, monthColumns, workingHoursPerDay);
+  const ganttSheet = createGanttSheet(developer, devTasks, tasks, developers, monthColumns, workingHoursPerDay);
   XLSX.utils.book_append_sheet(wb, ganttSheet, 'Gantt');
 
-  // Add Summary sheet
   const summarySheet = createSummarySheet(developer, summary, workingHoursPerDay);
   XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
 
-  // Generate filename
   const filename = `${sanitizeFilename(developer.name)}_Gantt_Report.xlsx`;
-
-  // Download
   XLSX.writeFile(wb, filename);
 }
 
@@ -357,13 +429,13 @@ export function exportDeveloperToExcel(
  */
 export function exportAllDevelopersToExcel(
   developers: Developer[],
+  tasks: Task[],
+  projects: string[],
   workingHoursPerDay: number
 ): void {
-  const allTasks = getAllProcessedTasks(developers, workingHoursPerDay);
-  const projectSummary = calculateProjectSummary(developers, workingHoursPerDay);
+  const projectSummary = calculateProjectSummary(developers, tasks, workingHoursPerDay);
 
-  // Calculate overall timeline range
-  const dateTasks = allTasks.map(t => ({ startDate: t.startDateObj, endDate: t.endDateObj }));
+  const dateTasks = tasks.map(t => ({ startDate: parseDate(t.startDate), endDate: parseDate(t.endDate) }));
   const range = calculateTimelineRange(dateTasks);
 
   let monthColumns: MonthColumn[] = [];
@@ -371,36 +443,27 @@ export function exportAllDevelopersToExcel(
     monthColumns = generateMonthsBetween(range.start, range.end);
   }
 
-  // Create workbook
   const wb = XLSX.utils.book_new();
 
   // Sheet 1: Project Summary
-  const summarySheet = createProjectSummarySheet(developers, projectSummary, workingHoursPerDay);
+  const summarySheet = createProjectSummarySheet(developers, tasks, projectSummary, workingHoursPerDay);
   XLSX.utils.book_append_sheet(wb, summarySheet, 'Project Summary');
 
-  // Sheet 2: Consolidated Gantt
-  const consolidatedSheet = createConsolidatedGanttSheet(allTasks, monthColumns);
+  // Sheet 2: Backlog
+  const backlogSheet = createBacklogSheet(tasks, developers, workingHoursPerDay);
+  XLSX.utils.book_append_sheet(wb, backlogSheet, 'Backlog');
+
+  // Sheet 3: Consolidated Gantt
+  const consolidatedSheet = createConsolidatedGanttSheet(tasks, developers, monthColumns, workingHoursPerDay);
   XLSX.utils.book_append_sheet(wb, consolidatedSheet, 'Consolidated Gantt');
 
-  // Sheet 3+: Individual developer sheets
+  // Sheet 4+: Individual developer sheets
   for (const dev of developers) {
-    const tasks = getProcessedTasksForDeveloper(dev, workingHoursPerDay);
-    const devDateTasks = tasks.map(t => ({ startDate: t.startDateObj, endDate: t.endDateObj }));
-    const devRange = calculateTimelineRange(devDateTasks);
-    let devMonthColumns: MonthColumn[] = [];
-    if (devRange) {
-      devMonthColumns = generateMonthsBetween(devRange.start, devRange.end);
-    }
-
-    const devSheet = createGanttSheet(dev, tasks, devMonthColumns, workingHoursPerDay);
-    // Sheet names have a 31 character limit in Excel
+    const devSheet = createGanttSheet(dev, tasks, tasks, developers, monthColumns, workingHoursPerDay);
     const sheetName = dev.name.length > 28 ? dev.name.substring(0, 28) : dev.name;
     XLSX.utils.book_append_sheet(wb, devSheet, sheetName);
   }
 
-  // Generate filename
   const filename = 'Project_Gantt_All_Developers.xlsx';
-
-  // Download
   XLSX.writeFile(wb, filename);
 }

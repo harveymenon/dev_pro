@@ -193,14 +193,14 @@ export function recalculateAllEndDates(tasks: Task[], workingHoursPerDay: number
 /**
  * Get backlog tasks (unassigned)
  */
-export function getBacklogTasks(tasks: Task[]): Task[] {
+export function getBacklogTasks<T extends Task>(tasks: T[]): T[] {
   return tasks.filter(task => task.assignedDeveloperId === null);
 }
 
 /**
  * Get tasks for a specific developer
  */
-export function getDeveloperTasks(tasks: Task[], developerId: string): Task[] {
+export function getDeveloperTasks<T extends Task>(tasks: T[], developerId: string): T[] {
   return tasks.filter(task => task.assignedDeveloperId === developerId);
 }
 

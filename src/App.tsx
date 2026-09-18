@@ -445,7 +445,7 @@ export default function App() {
     if (activeTab === 'overview') {
       exportAllDevelopersToExcel(developers, tasks, projects, workingHoursPerDay);
     } else if (activeTab !== 'backlog' && activeDeveloper) {
-      exportDeveloperToExcel(activeDeveloper, tasks, workingHoursPerDay);
+      exportDeveloperToExcel(activeDeveloper, tasks, developers, workingHoursPerDay);
     }
   }, [activeTab, activeDeveloper, developers, tasks, projects, workingHoursPerDay]);
 
