@@ -48,10 +48,22 @@ export async function fetchAppState(): Promise<AppState | null> {
     const workingHoursPerDay = settingsData?.find(s => s.key === 'working_hours_per_day')?.value || '8';
     const projectsData = settingsData?.find(s => s.key === 'projects')?.value || '[]';
 
+    // Transform tasks from Supabase format to app format
+    const transformedTasks: Task[] = (tasks || []).map((task: any) => ({
+      id: task.id,
+      title: task.title || 'Untitled Task',
+      project: task.project || '',
+      jiraUrl: task.jira_url || '',
+      hours: task.hours || 0,
+      startDate: task.start_date || new Date().toISOString().split('T')[0],
+      endDate: task.end_date || new Date().toISOString().split('T')[0],
+      assignedDeveloperId: task.assigned_developer_id || null,
+    }));
+
     return {
       workingHoursPerDay: parseInt(workingHoursPerDay, 10),
       developers: developers || [],
-      tasks: tasks || [],
+      tasks: transformedTasks,
       projects: JSON.parse(projectsData),
     };
   } catch (error) {

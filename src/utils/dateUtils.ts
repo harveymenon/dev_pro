@@ -233,7 +233,11 @@ export function formatDateISO(date: Date): string {
 /**
  * Parse ISO date string to Date object
  */
-export function parseDate(dateStr: string): Date {
+export function parseDate(dateStr: string | null | undefined): Date {
+  if (!dateStr) {
+    console.warn('parseDate called with null/undefined, returning current date');
+    return new Date();
+  }
   const [year, month, day] = dateStr.split('-').map(Number);
   return new Date(year, month - 1, day);
 }
