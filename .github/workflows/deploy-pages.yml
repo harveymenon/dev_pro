@@ -28,8 +28,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Remove lock file to avoid platform-specific binding issues
-          rm -f package-lock.json
+          # Remove both lock file and node_modules to fix native binding issues
+          rm -rf node_modules package-lock.json
           npm install
 
       - name: Build with Supabase credentials
