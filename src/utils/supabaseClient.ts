@@ -12,12 +12,23 @@ const isConfigured: boolean = !!(supabaseUrl &&
                      supabaseUrl !== 'YOUR_SUPABASE_URL' &&
                      supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY');
 
+// Debug logging
+console.log('🔍 Supabase Configuration Check:');
+console.log('  - URL:', supabaseUrl ? '✓ Set' : '✗ Missing');
+console.log('  - Key:', supabaseAnonKey ? '✓ Set' : '✗ Missing');
+console.log('  - Configured:', isConfigured ? '✓ Yes' : '✗ No');
+
 // Only create client if properly configured
 export const supabase: SupabaseClient | null = isConfigured 
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
 export const isSupabaseEnabled: boolean = isConfigured;
+
+if (!isConfigured) {
+  console.warn('⚠️ Supabase is NOT configured. Data will not be saved to cloud database.');
+  console.warn('⚠️ Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in GitHub Secrets.');
+}
 
 // Database schema types
 export interface Database {

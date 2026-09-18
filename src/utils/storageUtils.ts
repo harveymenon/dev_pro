@@ -75,8 +75,12 @@ export async function fetchDevelopers(): Promise<Developer[]> {
  * This will sync the entire state with the database
  */
 export async function saveDevelopers(developers: Developer[]): Promise<void> {
+  console.log('💾 Attempting to save developers to Supabase...');
+  console.log('  - Supabase client:', supabase ? '✓ Available' : '✗ Not available');
+  console.log('  - Developers count:', developers.length);
+  
   if (!supabase) {
-    console.warn('Supabase not configured, skipping save');
+    console.warn('⚠️ Supabase not configured, skipping save');
     return;
   }
 
@@ -218,7 +222,11 @@ export async function fetchWorkingHours(): Promise<number> {
  * Save working hours per day to Supabase
  */
 export async function saveWorkingHours(hours: number): Promise<void> {
-  if (!supabase) return;
+  console.log('💾 Attempting to save working hours:', hours);
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, skipping save');
+    return;
+  }
 
   try {
     const { data: existing } = await supabase
@@ -278,7 +286,11 @@ export async function fetchActiveTab(): Promise<string | null> {
  * Save active tab to Supabase
  */
 export async function saveActiveTab(tabId: string): Promise<void> {
-  if (!supabase) return;
+  console.log('💾 Attempting to save active tab:', tabId);
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, skipping save');
+    return;
+  }
 
   try {
     const { data: existing } = await supabase
