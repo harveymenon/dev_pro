@@ -218,19 +218,27 @@ async function saveTasks(tasks: Task[]): Promise<void> {
     let updated = 0;
     
     for (const task of tasks) {
+      // For backward compatibility, also set developer_id
+      // Use assigned_developer_id if available, otherwise use empty string
+      // This ensures we never send null to a NOT NULL column
+      const developerId = task.assignedDeveloperId || '';
+      
       if (existingIds.has(task.id)) {
+        const updateData: any = {
+          title: task.title,
+          project: task.project || '',
+          jira_url: task.jiraUrl || '',
+          hours: task.hours || 0,
+          start_date: task.startDate,
+          end_date: task.endDate,
+          assigned_developer_id: task.assignedDeveloperId,
+          developer_id: developerId, // backward compatibility
+          updated_at: new Date().toISOString(),
+        };
+        
         const { error: updateError } = await supabase
           .from('tasks')
-          .update({
-            title: task.title,
-            project: task.project,
-            jira_url: task.jiraUrl,
-            hours: task.hours,
-            start_date: task.startDate,
-            end_date: task.endDate,
-            assigned_developer_id: task.assignedDeveloperId,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('id', task.id);
         
         if (updateError) {
@@ -239,18 +247,21 @@ async function saveTasks(tasks: Task[]): Promise<void> {
           updated++;
         }
       } else {
+        const insertData: any = {
+          id: task.id,
+          title: task.title,
+          project: task.project || '',
+          jira_url: task.jiraUrl || '',
+          hours: task.hours || 0,
+          start_date: task.startDate,
+          end_date: task.endDate,
+          assigned_developer_id: task.assignedDeveloperId,
+          developer_id: developerId, // backward compatibility
+        };
+        
         const { error: insertError } = await supabase
           .from('tasks')
-          .insert({
-            id: task.id,
-            title: task.title,
-            project: task.project,
-            jira_url: task.jiraUrl,
-            hours: task.hours,
-            start_date: task.startDate,
-            end_date: task.endDate,
-            assigned_developer_id: task.assignedDeveloperId,
-          });
+          .insert(insertData);
         
         if (insertError) {
           console.error('❌ Error inserting task', task.id, ':', insertError);
