@@ -1,18 +1,18 @@
-// Supabase storage utility functions
+// Supabase storage utility functions for centralized task architecture
 import { supabase, isSupabaseEnabled } from './supabaseClient';
-import { Developer, Task } from '../types';
+import { Developer, Task, AppState } from '../types';
 
 /**
- * Fetch all developers with their tasks from Supabase
+ * Fetch complete app state from Supabase
  */
-export async function fetchDevelopers(): Promise<Developer[]> {
+export async function fetchAppState(): Promise<AppState | null> {
   if (!supabase) {
-    console.warn('Supabase not configured, returning empty array');
-    return [];
+    console.warn('Supabase not configured, returning null');
+    return null;
   }
 
   try {
-    // Fetch all developers
+    // Fetch developers
     const { data: developers, error: devError } = await supabase
       .from('developers')
       .select('*')
@@ -20,14 +20,10 @@ export async function fetchDevelopers(): Promise<Developer[]> {
 
     if (devError) {
       console.error('Error fetching developers:', devError);
-      return [];
+      return null;
     }
 
-    if (!developers || developers.length === 0) {
-      return [];
-    }
-
-    // Fetch all tasks
+    // Fetch tasks
     const { data: tasks, error: taskError } = await supabase
       .from('tasks')
       .select('*')
@@ -35,57 +31,74 @@ export async function fetchDevelopers(): Promise<Developer[]> {
 
     if (taskError) {
       console.error('Error fetching tasks:', taskError);
-      return [];
+      return null;
     }
 
-    // Map tasks to developers
-    const developerMap = new Map<string, Developer>();
-    
-    developers.forEach((dev: any) => {
-      developerMap.set(dev.id, {
-        id: dev.id,
-        name: dev.name,
-        color: dev.color,
-        tasks: [],
-      });
-    });
+    // Fetch settings
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('settings')
+      .select('*');
 
-    tasks?.forEach((task: any) => {
-      const developer = developerMap.get(task.developer_id);
-      if (developer) {
-        developer.tasks.push({
-          id: task.id,
-          title: task.title,
-          hours: task.hours,
-          startDate: task.start_date,
-          endDate: task.end_date,
-        });
-      }
-    });
+    if (settingsError) {
+      console.error('Error fetching settings:', settingsError);
+      return null;
+    }
 
-    return Array.from(developerMap.values());
+    // Parse settings
+    const workingHoursPerDay = settingsData?.find(s => s.key === 'working_hours_per_day')?.value || '8';
+    const projectsData = settingsData?.find(s => s.key === 'projects')?.value || '[]';
+
+    return {
+      workingHoursPerDay: parseInt(workingHoursPerDay, 10),
+      developers: developers || [],
+      tasks: tasks || [],
+      projects: JSON.parse(projectsData),
+    };
   } catch (error) {
-    console.error('Error in fetchDevelopers:', error);
-    return [];
+    console.error('Error in fetchAppState:', error);
+    return null;
   }
 }
 
 /**
- * Save developers to Supabase
- * This will sync the entire state with the database
+ * Save complete app state to Supabase
  */
-export async function saveDevelopers(developers: Developer[]): Promise<void> {
-  console.log('💾 Attempting to save developers to Supabase...');
+export async function saveAppState(appState: AppState): Promise<void> {
+  console.log('💾 Attempting to save app state to Supabase...');
   console.log('  - Supabase client:', supabase ? '✓ Available' : '✗ Not available');
-  console.log('  - Developers count:', developers.length);
-  
+  console.log('  - Developers:', appState.developers.length);
+  console.log('  - Tasks:', appState.tasks.length);
+
   if (!supabase) {
     console.warn('⚠️ Supabase not configured, skipping save');
     return;
   }
 
   try {
-    // Get current developers from database
+    // Save developers
+    await saveDevelopers(appState.developers);
+
+    // Save tasks
+    await saveTasks(appState.tasks);
+
+    // Save settings
+    await saveWorkingHours(appState.workingHoursPerDay);
+    await saveProjects(appState.projects);
+
+    console.log('✅ App state saved successfully');
+  } catch (error) {
+    console.error('❌ Error saving app state:', error);
+  }
+}
+
+/**
+ * Save developers to Supabase
+ */
+async function saveDevelopers(developers: Developer[]): Promise<void> {
+  if (!supabase) return;
+
+  try {
+    // Get current developers
     const { data: existingDevelopers } = await supabase
       .from('developers')
       .select('id');
@@ -93,7 +106,7 @@ export async function saveDevelopers(developers: Developer[]): Promise<void> {
     const existingIds = new Set(existingDevelopers?.map((d: any) => d.id) || []);
     const currentIds = new Set(developers.map(d => d.id));
 
-    // Delete developers that no longer exist
+    // Delete removed developers
     const toDelete = Array.from(existingIds).filter(id => !currentIds.has(id));
     if (toDelete.length > 0) {
       await supabase
@@ -105,7 +118,6 @@ export async function saveDevelopers(developers: Developer[]): Promise<void> {
     // Upsert developers
     for (const dev of developers) {
       if (existingIds.has(dev.id)) {
-        // Update existing developer
         await supabase
           .from('developers')
           .update({
@@ -115,7 +127,6 @@ export async function saveDevelopers(developers: Developer[]): Promise<void> {
           })
           .eq('id', dev.id);
       } else {
-        // Insert new developer
         await supabase
           .from('developers')
           .insert({
@@ -124,32 +135,28 @@ export async function saveDevelopers(developers: Developer[]): Promise<void> {
             color: dev.color,
           });
       }
-
-      // Sync tasks for this developer
-      await syncDeveloperTasks(dev.id, dev.tasks);
     }
   } catch (error) {
-    console.error('Error in saveDevelopers:', error);
+    console.error('Error saving developers:', error);
   }
 }
 
 /**
- * Sync tasks for a specific developer
+ * Save tasks to Supabase
  */
-async function syncDeveloperTasks(developerId: string, tasks: Task[]): Promise<void> {
+async function saveTasks(tasks: Task[]): Promise<void> {
   if (!supabase) return;
 
   try {
-    // Get current tasks for this developer
+    // Get current tasks
     const { data: existingTasks } = await supabase
       .from('tasks')
-      .select('id')
-      .eq('developer_id', developerId);
+      .select('id');
 
     const existingIds = new Set(existingTasks?.map((t: any) => t.id) || []);
     const currentIds = new Set(tasks.map(t => t.id));
 
-    // Delete tasks that no longer exist
+    // Delete removed tasks
     const toDelete = Array.from(existingIds).filter(id => !currentIds.has(id));
     if (toDelete.length > 0) {
       await supabase
@@ -161,60 +168,36 @@ async function syncDeveloperTasks(developerId: string, tasks: Task[]): Promise<v
     // Upsert tasks
     for (const task of tasks) {
       if (existingIds.has(task.id)) {
-        // Update existing task
         await supabase
           .from('tasks')
           .update({
             title: task.title,
+            project: task.project,
+            jira_url: task.jiraUrl,
             hours: task.hours,
             start_date: task.startDate,
             end_date: task.endDate,
+            assigned_developer_id: task.assignedDeveloperId,
             updated_at: new Date().toISOString(),
           })
           .eq('id', task.id);
       } else {
-        // Insert new task
         await supabase
           .from('tasks')
           .insert({
             id: task.id,
-            developer_id: developerId,
             title: task.title,
+            project: task.project,
+            jira_url: task.jiraUrl,
             hours: task.hours,
             start_date: task.startDate,
             end_date: task.endDate,
+            assigned_developer_id: task.assignedDeveloperId,
           });
       }
     }
   } catch (error) {
-    console.error('Error in syncDeveloperTasks:', error);
-  }
-}
-
-/**
- * Fetch working hours per day from Supabase
- */
-export async function fetchWorkingHours(): Promise<number> {
-  if (!supabase) {
-    return 8; // Default value
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('key', 'working_hours_per_day')
-      .single();
-
-    if (error || !data) {
-      return 8; // Default value
-    }
-
-    const hours = parseInt(data.value, 10);
-    return isNaN(hours) ? 8 : hours;
-  } catch (error) {
-    console.error('Error fetching working hours:', error);
-    return 8; // Default value
+    console.error('Error saving tasks:', error);
   }
 }
 
@@ -257,81 +240,36 @@ export async function saveWorkingHours(hours: number): Promise<void> {
 }
 
 /**
- * Fetch active tab from Supabase
+ * Save projects list to Supabase
  */
-export async function fetchActiveTab(): Promise<string | null> {
-  if (!supabase) {
-    return null;
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('key', 'active_tab')
-      .single();
-
-    if (error || !data) {
-      return null;
-    }
-
-    return data.value;
-  } catch (error) {
-    console.error('Error fetching active tab:', error);
-    return null;
-  }
-}
-
-/**
- * Save active tab to Supabase
- */
-export async function saveActiveTab(tabId: string): Promise<void> {
-  console.log('💾 Attempting to save active tab:', tabId);
-  if (!supabase) {
-    console.warn('⚠️ Supabase not configured, skipping save');
-    return;
-  }
+export async function saveProjects(projects: string[]): Promise<void> {
+  if (!supabase) return;
 
   try {
     const { data: existing } = await supabase
       .from('settings')
       .select('key')
-      .eq('key', 'active_tab')
+      .eq('key', 'projects')
       .single();
 
     if (existing) {
       await supabase
         .from('settings')
         .update({
-          value: tabId,
+          value: JSON.stringify(projects),
           updated_at: new Date().toISOString(),
         })
-        .eq('key', 'active_tab');
+        .eq('key', 'projects');
     } else {
       await supabase
         .from('settings')
         .insert({
-          key: 'active_tab',
-          value: tabId,
+          key: 'projects',
+          value: JSON.stringify(projects),
         });
     }
   } catch (error) {
-    console.error('Error saving active tab:', error);
-  }
-}
-
-/**
- * Clear all data from Supabase
- */
-export async function clearAllData(): Promise<void> {
-  if (!supabase) return;
-
-  try {
-    await supabase.from('tasks').delete().neq('id', '');
-    await supabase.from('developers').delete().neq('id', '');
-    await supabase.from('settings').delete().neq('key', '');
-  } catch (error) {
-    console.error('Error clearing data:', error);
+    console.error('Error saving projects:', error);
   }
 }
 

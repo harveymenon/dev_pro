@@ -1,11 +1,9 @@
-// Developer management utility functions
-import { Developer, Task, ProcessedTask, DeveloperSummary, ProjectSummary } from '../types';
+// Developer and Task management utility functions
+import { Developer, Task, ProcessedTask, DeveloperSummary, ProjectSummary, BacklogSummary } from '../types';
 import {
   calculateEndDate,
   calculateWorkingDays,
   calculateTimelineRange,
-  calculateTotalWorkingDays,
-  calculateTotalHours,
   formatDateISO,
   parseDate,
 } from './dateUtils';
@@ -26,6 +24,15 @@ export const DEVELOPER_COLORS = [
   '#0D9488', // Teal
 ];
 
+// Default projects
+export const DEFAULT_PROJECTS = [
+  'Tres Health',
+  'Shopmool',
+  'Hamsarjo',
+  'ZeusIP',
+  'Other',
+];
+
 /**
  * Get the next available developer ID
  */
@@ -42,32 +49,27 @@ export function getNextDeveloperId(developers: Developer[]): string {
 }
 
 /**
- * Get the next available task ID across all developers
+ * Get the next available task ID
  */
-export function getNextTaskId(developers: Developer[]): string {
+export function getNextTaskId(tasks: Task[]): string {
   let maxNum = 0;
-  for (const dev of developers) {
-    for (const task of dev.tasks) {
-      const match = task.id.match(/TASK-(\d+)/);
-      if (match) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) maxNum = num;
-      }
+  for (const task of tasks) {
+    const match = task.id.match(/TASK-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
     }
   }
   return `TASK-${String(maxNum + 1).padStart(3, '0')}`;
 }
 
 /**
- * Check if a task ID is unique across all developers
+ * Check if a task ID is unique
  */
-export function isTaskIdUnique(developers: Developer[], taskId: string, excludeDevId?: string, excludeTaskId?: string): boolean {
-  for (const dev of developers) {
-    if (excludeDevId && dev.id === excludeDevId) continue;
-    for (const task of dev.tasks) {
-      if (excludeTaskId && task.id === excludeTaskId) continue;
-      if (task.id === taskId) return false;
-    }
+export function isTaskIdUnique(tasks: Task[], taskId: string, excludeTaskId?: string): boolean {
+  for (const task of tasks) {
+    if (excludeTaskId && task.id === excludeTaskId) continue;
+    if (task.id === taskId) return false;
   }
   return true;
 }
@@ -80,7 +82,6 @@ export function getNextDeveloperColor(developers: Developer[]): string {
   for (const color of DEVELOPER_COLORS) {
     if (!usedColors.has(color)) return color;
   }
-  // If all colors are used, cycle through them
   return DEVELOPER_COLORS[developers.length % DEVELOPER_COLORS.length];
 }
 
@@ -92,7 +93,6 @@ export function addDeveloper(developers: Developer[], name: string): Developer[]
     id: getNextDeveloperId(developers),
     name: name.trim(),
     color: getNextDeveloperColor(developers),
-    tasks: [],
   };
   return [...developers, newDev];
 }
@@ -107,110 +107,134 @@ export function editDeveloperName(developers: Developer[], devId: string, newNam
 }
 
 /**
- * Delete a developer
+ * Delete a developer and unassign their tasks
  */
-export function deleteDeveloper(developers: Developer[], devId: string): Developer[] {
-  return developers.filter(dev => dev.id !== devId);
+export function deleteDeveloper(developers: Developer[], tasks: Task[], devId: string): { developers: Developer[]; tasks: Task[] } {
+  const updatedTasks = tasks.map(task =>
+    task.assignedDeveloperId === devId ? { ...task, assignedDeveloperId: null } : task
+  );
+  const updatedDevelopers = developers.filter(dev => dev.id !== devId);
+  return { developers: updatedDevelopers, tasks: updatedTasks };
 }
 
 /**
- * Add a task to a developer
+ * Create a new task
  */
-export function addTaskToDeveloper(
-  developers: Developer[],
-  devId: string,
-  task: Omit<Task, 'endDate'>,
+export function createTask(
+  tasks: Task[],
+  taskData: Omit<Task, 'endDate'>,
   workingHoursPerDay: number
-): Developer[] {
-  const startDate = parseDate(task.startDate);
-  const endDate = calculateEndDate(startDate, task.hours, workingHoursPerDay);
+): Task[] {
+  const startDate = parseDate(taskData.startDate);
+  const endDate = calculateEndDate(startDate, taskData.hours, workingHoursPerDay);
 
-  return developers.map(dev => {
-    if (dev.id !== devId) return dev;
-    return {
-      ...dev,
-      tasks: [...dev.tasks, {
-        ...task,
-        endDate: formatDateISO(endDate),
-      }],
-    };
-  });
+  const newTask: Task = {
+    ...taskData,
+    endDate: formatDateISO(endDate),
+  };
+
+  return [...tasks, newTask];
 }
 
 /**
- * Update a task in a developer
+ * Update a task
  */
-export function updateTaskInDeveloper(
-  developers: Developer[],
-  devId: string,
+export function updateTask(
+  tasks: Task[],
   taskId: string,
   updates: Partial<Omit<Task, 'endDate'>>,
   workingHoursPerDay: number
-): Developer[] {
-  return developers.map(dev => {
-    if (dev.id !== devId) return dev;
-    return {
-      ...dev,
-      tasks: dev.tasks.map(task => {
-        if (task.id !== taskId) return task;
-        const updatedTask = { ...task, ...updates };
-        // Recalculate end date
-        const startDate = parseDate(updatedTask.startDate);
-        const endDate = calculateEndDate(startDate, updatedTask.hours, workingHoursPerDay);
-        return { ...updatedTask, endDate: formatDateISO(endDate) };
-      }),
-    };
+): Task[] {
+  return tasks.map(task => {
+    if (task.id !== taskId) return task;
+    const updatedTask = { ...task, ...updates };
+    const startDate = parseDate(updatedTask.startDate);
+    const endDate = calculateEndDate(startDate, updatedTask.hours, workingHoursPerDay);
+    return { ...updatedTask, endDate: formatDateISO(endDate) };
   });
 }
 
 /**
- * Delete a task from a developer
+ * Delete a task
  */
-export function deleteTaskFromDeveloper(
+export function deleteTask(tasks: Task[], taskId: string): Task[] {
+  return tasks.filter(task => task.id !== taskId);
+}
+
+/**
+ * Assign a task to a developer
+ */
+export function assignTask(tasks: Task[], taskId: string, developerId: string): Task[] {
+  return tasks.map(task =>
+    task.id === taskId ? { ...task, assignedDeveloperId: developerId } : task
+  );
+}
+
+/**
+ * Unassign a task (move to backlog)
+ */
+export function unassignTask(tasks: Task[], taskId: string): Task[] {
+  return tasks.map(task =>
+    task.id === taskId ? { ...task, assignedDeveloperId: null } : task
+  );
+}
+
+/**
+ * Recalculate all end dates for all tasks
+ */
+export function recalculateAllEndDates(tasks: Task[], workingHoursPerDay: number): Task[] {
+  return tasks.map(task => {
+    const startDate = parseDate(task.startDate);
+    const endDate = calculateEndDate(startDate, task.hours, workingHoursPerDay);
+    return { ...task, endDate: formatDateISO(endDate) };
+  });
+}
+
+/**
+ * Get backlog tasks (unassigned)
+ */
+export function getBacklogTasks(tasks: Task[]): Task[] {
+  return tasks.filter(task => task.assignedDeveloperId === null);
+}
+
+/**
+ * Get tasks for a specific developer
+ */
+export function getDeveloperTasks(tasks: Task[], developerId: string): Task[] {
+  return tasks.filter(task => task.assignedDeveloperId === developerId);
+}
+
+/**
+ * Get processed tasks with calculated fields
+ */
+export function getProcessedTasks(
+  tasks: Task[],
   developers: Developer[],
-  devId: string,
-  taskId: string
-): Developer[] {
-  return developers.map(dev => {
-    if (dev.id !== devId) return dev;
-    return {
-      ...dev,
-      tasks: dev.tasks.filter(task => task.id !== taskId),
-    };
-  });
-}
-
-/**
- * Recalculate all end dates for all tasks (when working hours per day changes)
- */
-export function recalculateAllEndDates(developers: Developer[], workingHoursPerDay: number): Developer[] {
-  return developers.map(dev => ({
-    ...dev,
-    tasks: dev.tasks.map(task => {
-      const startDate = parseDate(task.startDate);
-      const endDate = calculateEndDate(startDate, task.hours, workingHoursPerDay);
-      return { ...task, endDate: formatDateISO(endDate) };
-    }),
-  }));
-}
-
-/**
- * Get processed tasks for a developer (with calculated fields)
- */
-export function getProcessedTasksForDeveloper(
-  developer: Developer,
   workingHoursPerDay: number
 ): ProcessedTask[] {
-  return developer.tasks.map(task => {
+  return tasks.map(task => {
     const startDateObj = parseDate(task.startDate);
     const endDateObj = parseDate(task.endDate);
     const workingDays = calculateWorkingDays(startDateObj, endDateObj);
 
+    let developerId: string | null = null;
+    let developerName: string | null = null;
+    let developerColor: string | null = null;
+
+    if (task.assignedDeveloperId) {
+      const developer = developers.find(d => d.id === task.assignedDeveloperId);
+      if (developer) {
+        developerId = developer.id;
+        developerName = developer.name;
+        developerColor = developer.color;
+      }
+    }
+
     return {
       ...task,
-      developerId: developer.id,
-      developerName: developer.name,
-      developerColor: developer.color,
+      developerId,
+      developerName,
+      developerColor,
       startDateObj,
       endDateObj,
       workingDays,
@@ -219,29 +243,33 @@ export function getProcessedTasksForDeveloper(
 }
 
 /**
- * Get all processed tasks across all developers
+ * Calculate backlog summary
  */
-export function getAllProcessedTasks(
-  developers: Developer[],
-  workingHoursPerDay: number
-): ProcessedTask[] {
-  const allTasks: ProcessedTask[] = [];
-  for (const dev of developers) {
-    allTasks.push(...getProcessedTasksForDeveloper(dev, workingHoursPerDay));
-  }
-  // Sort by start date
-  allTasks.sort((a, b) => a.startDateObj.getTime() - b.startDateObj.getTime());
-  return allTasks;
+export function calculateBacklogSummary(tasks: Task[]): BacklogSummary {
+  const backlogTasks = getBacklogTasks(tasks);
+  const projects = new Set(backlogTasks.map(t => t.project).filter(p => p));
+
+  return {
+    totalTasks: backlogTasks.length,
+    totalHours: backlogTasks.reduce((sum, t) => sum + t.hours, 0),
+    totalProjects: projects.size,
+  };
 }
 
 /**
  * Calculate developer summary
  */
 export function calculateDeveloperSummary(
-  developer: Developer,
+  tasks: Task[],
+  developerId: string,
   workingHoursPerDay: number
 ): DeveloperSummary {
-  const processedTasks = getProcessedTasksForDeveloper(developer, workingHoursPerDay);
+  const devTasks = getDeveloperTasks(tasks, developerId);
+  const processedTasks = devTasks.map(task => ({
+    startDate: parseDate(task.startDate),
+    endDate: parseDate(task.endDate),
+    hours: task.hours,
+  }));
 
   if (processedTasks.length === 0) {
     return {
@@ -253,52 +281,45 @@ export function calculateDeveloperSummary(
     };
   }
 
-  const dateTasks = processedTasks.map(t => ({
-    startDate: t.startDateObj,
-    endDate: t.endDateObj,
-  }));
-
-  const range = calculateTimelineRange(dateTasks);
+  const range = calculateTimelineRange(processedTasks);
 
   return {
     totalTasks: processedTasks.length,
-    totalHours: calculateTotalHours(processedTasks),
-    totalWorkingDays: calculateTotalWorkingDays(dateTasks),
+    totalHours: processedTasks.reduce((sum, t) => sum + t.hours, 0),
+    totalWorkingDays: processedTasks.reduce((sum, t) => {
+      return sum + calculateWorkingDays(t.startDate, t.endDate);
+    }, 0),
     projectStart: range?.start || null,
     projectEnd: range?.end || null,
   };
 }
 
 /**
- * Calculate project summary across all developers
+ * Calculate project summary
  */
 export function calculateProjectSummary(
   developers: Developer[],
+  tasks: Task[],
   workingHoursPerDay: number
 ): ProjectSummary {
-  const allTasks = getAllProcessedTasks(developers, workingHoursPerDay);
+  const backlogTasks = getBacklogTasks(tasks);
+  const assignedTasks = tasks.filter(t => t.assignedDeveloperId !== null);
 
-  if (allTasks.length === 0) {
-    return {
-      totalDevelopers: developers.length,
-      totalTasks: 0,
-      totalHours: 0,
-      projectStart: null,
-      projectEnd: null,
-    };
-  }
-
-  const dateTasks = allTasks.map(t => ({
-    startDate: t.startDateObj,
-    endDate: t.endDateObj,
+  const allProcessedTasks = tasks.map(task => ({
+    startDate: parseDate(task.startDate),
+    endDate: parseDate(task.endDate),
+    hours: task.hours,
   }));
 
-  const range = calculateTimelineRange(dateTasks);
+  const range = allProcessedTasks.length > 0 ? calculateTimelineRange(allProcessedTasks) : null;
 
   return {
     totalDevelopers: developers.length,
-    totalTasks: allTasks.length,
-    totalHours: calculateTotalHours(allTasks),
+    totalTasks: tasks.length,
+    assignedTasks: assignedTasks.length,
+    backlogTasks: backlogTasks.length,
+    totalHours: tasks.reduce((sum, t) => sum + t.hours, 0),
+    backlogHours: backlogTasks.reduce((sum, t) => sum + t.hours, 0),
     projectStart: range?.start || null,
     projectEnd: range?.end || null,
   };
@@ -314,6 +335,30 @@ export function getDeveloperById(developers: Developer[], devId: string): Develo
 /**
  * Find which developer owns a task
  */
-export function findDeveloperByTaskId(developers: Developer[], taskId: string): Developer | undefined {
-  return developers.find(dev => dev.tasks.some(task => task.id === taskId));
+export function findDeveloperByTaskId(tasks: Task[], developers: Developer[], taskId: string): Developer | undefined {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task || !task.assignedDeveloperId) return undefined;
+  return developers.find(dev => dev.id === task.assignedDeveloperId);
+}
+
+/**
+ * Validate Jira URL
+ */
+export function validateJiraUrl(url: string): boolean {
+  if (!url) return true; // Empty is valid
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract Jira ticket ID from URL
+ */
+export function extractJiraTicketId(url: string): string {
+  if (!url) return '';
+  const match = url.match(/\/browse\/([A-Z]+-\d+)/);
+  return match ? match[1] : url;
 }
