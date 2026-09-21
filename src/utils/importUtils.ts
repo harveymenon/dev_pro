@@ -52,6 +52,13 @@ export async function parseExcelFile(file: File): Promise<ImportPreview> {
         // Convert to JSON
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
         
+        console.log('📊 Excel file parsed:', {
+          totalRows: jsonData.length,
+          sheetName,
+          firstRow: jsonData[0],
+          sampleData: jsonData.slice(0, 3)
+        });
+        
         if (jsonData.length === 0) {
           resolve({
             tasks: [],
@@ -71,6 +78,7 @@ export async function parseExcelFile(file: File): Promise<ImportPreview> {
         const tasks: Task[] = [];
         const errors: ImportError[] = [];
         const warnings: ImportWarning[] = [];
+        const seenIds = new Set<string>();
         
         for (let i = 1; i < jsonData.length; i++) {
           const row = jsonData[i] as any[];
@@ -82,12 +90,31 @@ export async function parseExcelFile(file: File): Promise<ImportPreview> {
           if (taskResult.errors.length > 0) {
             errors.push(...taskResult.errors);
           } else if (taskResult.task) {
+            // Check for duplicate IDs within the file
+            if (taskResult.task.id && seenIds.has(taskResult.task.id)) {
+              warnings.push({
+                row: rowNum,
+                field: 'id',
+                message: `Duplicate task ID "${taskResult.task.id}" found in file. Will be renamed on import.`,
+                value: taskResult.task.id
+              });
+            } else if (taskResult.task.id) {
+              seenIds.add(taskResult.task.id);
+            }
+            
             if (taskResult.warnings.length > 0) {
               warnings.push(...taskResult.warnings);
             }
             tasks.push(taskResult.task);
           }
         }
+        
+        console.log('✅ Parsing complete:', {
+          totalRows: jsonData.length - 1,
+          validTasks: tasks.length,
+          errors: errors.length,
+          warnings: warnings.length
+        });
         
         resolve({
           tasks,
@@ -356,10 +383,15 @@ function parseDate(
 }
 
 /**
- * Assign IDs to imported tasks
+ * Assign IDs to imported tasks and check for duplicates
  */
-export function assignTaskIds(tasks: Task[], existingTaskIds: string[]): Task[] {
+export function assignTaskIds(
+  tasks: Task[], 
+  existingTaskIds: string[]
+): { tasks: Task[]; duplicates: string[] } {
   let nextId = 1;
+  const duplicates: string[] = [];
+  const usedIds = new Set<string>(existingTaskIds);
   
   // Find the highest task number
   existingTaskIds.forEach(id => {
@@ -372,23 +404,30 @@ export function assignTaskIds(tasks: Task[], existingTaskIds: string[]): Task[] 
     }
   });
   
-  return tasks.map(task => {
+  const processedTasks = tasks.map(task => {
     if (task.id) {
-      // Check if ID already exists
-      if (existingTaskIds.includes(task.id)) {
+      // Check if ID already exists in existing tasks OR in the current import batch
+      if (usedIds.has(task.id)) {
+        // This is a duplicate - mark it
+        duplicates.push(task.id);
         // Generate new ID
         const newId = `TASK-${String(nextId).padStart(3, '0')}`;
         nextId++;
+        usedIds.add(newId);
         return { ...task, id: newId };
       }
+      usedIds.add(task.id);
       return task;
     } else {
       // Generate new ID
       const newId = `TASK-${String(nextId).padStart(3, '0')}`;
       nextId++;
+      usedIds.add(newId);
       return { ...task, id: newId };
     }
   });
+  
+  return { tasks: processedTasks, duplicates };
 }
 
 /**

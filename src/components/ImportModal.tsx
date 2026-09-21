@@ -62,8 +62,8 @@ export default function ImportModal({
   const handleImport = () => {
     if (!preview || preview.tasks.length === 0) return;
 
-    // Assign IDs to tasks
-    const tasksWithIds = assignTaskIds(preview.tasks, existingTaskIds);
+    // Assign IDs to tasks and check for duplicates
+    const { tasks: tasksWithIds, duplicates } = assignTaskIds(preview.tasks, existingTaskIds);
 
     // Validate against existing developers
     const { validTasks, warnings } = validateImportedTasks(
@@ -74,12 +74,21 @@ export default function ImportModal({
     // Combine warnings
     const allWarnings = [...preview.warnings, ...warnings];
 
+    // Add duplicate warnings
+    if (duplicates.length > 0) {
+      allWarnings.push({
+        row: 0,
+        field: 'id',
+        message: `${duplicates.length} duplicate task ID(s) found and renamed: ${duplicates.slice(0, 5).join(', ')}${duplicates.length > 5 ? '...' : ''}`
+      });
+    }
+
     // Show warnings if any
     if (allWarnings.length > 0) {
       const confirmed = window.confirm(
         `Import ${validTasks.length} tasks?\n\n` +
         `${allWarnings.length} warning(s):\n` +
-        allWarnings.map(w => `Row ${w.row}: ${w.message}`).join('\n')
+        allWarnings.map(w => w.row > 0 ? `Row ${w.row}: ${w.message}` : w.message).join('\n')
       );
       
       if (!confirmed) return;
