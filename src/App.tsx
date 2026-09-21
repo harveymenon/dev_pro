@@ -44,6 +44,7 @@ import {
   exportDeveloperToExcel,
   exportAllDevelopersToExcel,
 } from './utils/excelUtils';
+import ImportModal from './components/ImportModal';
 
 // Sample data
 const SAMPLE_DEVELOPERS: Developer[] = [
@@ -245,6 +246,9 @@ export default function App() {
   const [assigningTaskId, setAssigningTaskId] = useState<string | null>(null);
   const [assigningToDeveloper, setAssigningToDeveloper] = useState<string>('');
 
+  // Import modal
+  const [showImportModal, setShowImportModal] = useState(false);
+
   // Tooltip state
   const [tooltipData, setTooltipData] = useState<{
     task: ProcessedTask;
@@ -445,6 +449,20 @@ export default function App() {
     setTasks(prev => deleteTask(prev, deleteTaskConfirm));
     setDeleteTaskConfirm(null);
   }, [deleteTaskConfirm]);
+
+  // Handle import tasks
+  const handleImportTasks = useCallback((importedTasks: Task[]) => {
+    console.log('📥 Importing', importedTasks.length, 'tasks');
+    
+    // Add all imported tasks to the state
+    setTasks(prev => {
+      const newTasks = [...prev, ...importedTasks];
+      console.log('✅ Tasks imported, total count:', newTasks.length);
+      return newTasks;
+    });
+    
+    setShowImportModal(false);
+  }, []);
 
   // Handle assign task
   const handleAssignTask = useCallback(() => {
@@ -756,12 +774,20 @@ export default function App() {
                 <div className="text-2xl font-bold">{backlogSummary.totalProjects}</div>
               </div>
             </div>
-            <button
-              onClick={() => handleOpenAddTask()}
-              className="mb-4 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-            >
-              + Add New Task
-            </button>
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={() => handleOpenAddTask()}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+              >
+                + Add New Task
+              </button>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+              >
+                📥 Import Tasks
+              </button>
+            </div>
           </>
         )}
 
@@ -798,6 +824,12 @@ export default function App() {
                 className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
               >
                 + Add Task
+              </button>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+              >
+                📥 Import Tasks
               </button>
               <button
                 onClick={handleExport}
@@ -1196,6 +1228,15 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Import Tasks Modal */}
+      <ImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={handleImportTasks}
+        existingTaskIds={tasks.map(t => t.id)}
+        existingDeveloperIds={developers.map(d => d.id)}
+      />
 
       {/* Tooltip */}
       {tooltipData && (
