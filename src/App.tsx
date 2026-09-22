@@ -63,6 +63,11 @@ const SAMPLE_TASKS: Task[] = [
     startDate: '2026-01-05',
     endDate: '',
     assignedDeveloperId: 'DEV-001',
+    priority: 'High',
+    status: 'Done',
+    reporter: 'Harvey',
+    resolution: 'Fixed',
+    created: '2026-01-02',
   },
   {
     id: 'TASK-002',
@@ -73,6 +78,11 @@ const SAMPLE_TASKS: Task[] = [
     startDate: '2026-01-12',
     endDate: '',
     assignedDeveloperId: 'DEV-001',
+    priority: 'Highest',
+    status: 'In Progress',
+    reporter: 'Harvey',
+    resolution: 'Unresolved',
+    created: '2026-01-08',
   },
   {
     id: 'TASK-003',
@@ -83,6 +93,11 @@ const SAMPLE_TASKS: Task[] = [
     startDate: '2026-02-02',
     endDate: '',
     assignedDeveloperId: 'DEV-002',
+    priority: 'Highest',
+    status: 'In UAT',
+    reporter: 'Pankul',
+    resolution: 'Unresolved',
+    created: '2026-01-25',
   },
   {
     id: 'TASK-004',
@@ -93,6 +108,11 @@ const SAMPLE_TASKS: Task[] = [
     startDate: '2026-02-23',
     endDate: '',
     assignedDeveloperId: 'DEV-002',
+    priority: 'Medium',
+    status: 'Ready',
+    reporter: 'Harvey',
+    resolution: 'Unresolved',
+    created: '2026-02-15',
   },
   {
     id: 'TASK-005',
@@ -103,6 +123,11 @@ const SAMPLE_TASKS: Task[] = [
     startDate: '2026-03-02',
     endDate: '',
     assignedDeveloperId: 'DEV-003',
+    priority: 'High',
+    status: 'Backlog',
+    reporter: 'Pankul',
+    resolution: 'Unresolved',
+    created: '2026-02-25',
   },
   {
     id: 'TASK-006',
@@ -113,6 +138,11 @@ const SAMPLE_TASKS: Task[] = [
     startDate: '2026-03-16',
     endDate: '',
     assignedDeveloperId: 'DEV-003',
+    priority: 'Medium',
+    status: 'Ready',
+    reporter: 'Harvey',
+    resolution: 'Unresolved',
+    created: '2026-03-10',
   },
   {
     id: 'TASK-007',
@@ -123,6 +153,11 @@ const SAMPLE_TASKS: Task[] = [
     startDate: '2026-03-16',
     endDate: '',
     assignedDeveloperId: null, // Backlog
+    priority: 'Medium',
+    status: 'Backlog',
+    reporter: 'Harvey',
+    resolution: 'Unresolved',
+    created: '2026-03-12',
   },
 ];
 
@@ -249,6 +284,16 @@ export default function App() {
   // Import modal
   const [showImportModal, setShowImportModal] = useState(false);
 
+  // Overview filters and search
+  const [overviewSearch, setOverviewSearch] = useState('');
+  const [overviewFilterAssignee, setOverviewFilterAssignee] = useState<string>('all');
+  const [overviewFilterProject, setOverviewFilterProject] = useState<string>('all');
+  const [overviewFilterPriority, setOverviewFilterPriority] = useState<string>('all');
+  const [overviewFilterStatus, setOverviewFilterStatus] = useState<string>('all');
+  
+  // Expanded developer groups in Overview
+  const [expandedDevelopers, setExpandedDevelopers] = useState<Set<string>>(new Set());
+
   // Tooltip state
   const [tooltipData, setTooltipData] = useState<{
     task: ProcessedTask;
@@ -303,6 +348,67 @@ export default function App() {
     
     return grouped;
   }, [processedTasks, developers, activeTab]);
+
+  // Filtered tasks for Overview
+  const filteredOverviewTasks = useMemo(() => {
+    if (activeTab !== 'overview') return [];
+    
+    let filtered = processedTasks.filter(t => t.assignedDeveloperId !== null);
+    
+    // Apply search filter
+    if (overviewSearch) {
+      const searchLower = overviewSearch.toLowerCase();
+      filtered = filtered.filter(task => 
+        task.id.toLowerCase().includes(searchLower) ||
+        task.title.toLowerCase().includes(searchLower) ||
+        task.project.toLowerCase().includes(searchLower) ||
+        (task.jiraUrl && task.jiraUrl.toLowerCase().includes(searchLower)) ||
+        (task.developerName && task.developerName.toLowerCase().includes(searchLower)) ||
+        (task.reporter && task.reporter.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    // Apply assignee filter
+    if (overviewFilterAssignee !== 'all') {
+      filtered = filtered.filter(task => task.assignedDeveloperId === overviewFilterAssignee);
+    }
+    
+    // Apply project filter
+    if (overviewFilterProject !== 'all') {
+      filtered = filtered.filter(task => task.project === overviewFilterProject);
+    }
+    
+    // Apply priority filter
+    if (overviewFilterPriority !== 'all') {
+      filtered = filtered.filter(task => task.priority === overviewFilterPriority);
+    }
+    
+    // Apply status filter
+    if (overviewFilterStatus !== 'all') {
+      filtered = filtered.filter(task => task.status === overviewFilterStatus);
+    }
+    
+    return filtered;
+  }, [processedTasks, activeTab, overviewSearch, overviewFilterAssignee, overviewFilterProject, overviewFilterPriority, overviewFilterStatus]);
+
+  // Get unique values for filters
+  const uniqueProjects = useMemo(() => {
+    const projects = new Set(processedTasks.map(t => t.project).filter(p => p));
+    return Array.from(projects).sort();
+  }, [processedTasks]);
+
+  // Toggle developer group expansion
+  const toggleDeveloperExpansion = (devId: string) => {
+    setExpandedDevelopers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(devId)) {
+        newSet.delete(devId);
+      } else {
+        newSet.add(devId);
+      }
+      return newSet;
+    });
+  };
 
   // Calculate timeline range
   const timelineRange = useMemo(() => {
@@ -757,6 +863,7 @@ export default function App() {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <>
+            {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <div className="text-sm text-gray-500">Total Tasks</div>
@@ -775,10 +882,12 @@ export default function App() {
                 <div className="text-2xl font-bold">{projectSummary.totalHours}</div>
               </div>
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <div className="text-sm text-gray-500">Backlog Hours</div>
-                <div className="text-2xl font-bold">{projectSummary.backlogHours}</div>
+                <div className="text-sm text-gray-500">Developers</div>
+                <div className="text-2xl font-bold">{developers.length}</div>
               </div>
             </div>
+
+            {/* Export Button */}
             <button
               onClick={handleExport}
               className="mb-4 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
@@ -786,88 +895,250 @@ export default function App() {
               Export All to Excel
             </button>
 
-            {/* Developer Segments */}
-            <div className="space-y-6">
-              {developers.map(developer => {
-                const devTasks = tasksByDeveloper[developer.id] || [];
-                const devSummary = calculateDeveloperSummary(tasks, developer.id, workingHoursPerDay);
-                
-                if (devTasks.length === 0) return null;
-                
-                return (
-                  <div key={developer.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    {/* Developer Header */}
-                    <div 
-                      className="px-6 py-4 border-b border-gray-200"
-                      style={{ backgroundColor: `${developer.color}15` }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div 
-                            className="w-4 h-4 rounded-full"
-                            style={{ backgroundColor: developer.color }}
-                          ></div>
-                          <h3 className="text-lg font-semibold text-gray-900">{developer.name}</h3>
-                          <span className="text-sm text-gray-500">
-                            {devTasks.length} task{devTasks.length !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-600">
-                          <div>
-                            <span className="font-medium">{devSummary.totalHours}</span> hours
-                          </div>
-                          <div>
-                            <span className="font-medium">{devSummary.totalWorkingDays}</span> working days
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+            {/* Filters and Search */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="flex-1 min-w-[200px]">
+                  <input
+                    type="text"
+                    placeholder="🔍 Search tasks..."
+                    value={overviewSearch}
+                    onChange={(e) => setOverviewSearch(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <select
+                  value={overviewFilterAssignee}
+                  onChange={(e) => setOverviewFilterAssignee(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Assignees</option>
+                  {developers.map(dev => (
+                    <option key={dev.id} value={dev.id}>{dev.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={overviewFilterProject}
+                  onChange={(e) => setOverviewFilterProject(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Projects</option>
+                  {uniqueProjects.map(proj => (
+                    <option key={proj} value={proj}>{proj}</option>
+                  ))}
+                </select>
+                <select
+                  value={overviewFilterPriority}
+                  onChange={(e) => setOverviewFilterPriority(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Highest">Highest</option>
+                </select>
+                <select
+                  value={overviewFilterStatus}
+                  onChange={(e) => setOverviewFilterStatus(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="Backlog">Backlog</option>
+                  <option value="Ready">Ready</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="In UAT">In UAT</option>
+                  <option value="Done">Done</option>
+                </select>
+              </div>
+              {overviewSearch || overviewFilterAssignee !== 'all' || overviewFilterProject !== 'all' || overviewFilterPriority !== 'all' || overviewFilterStatus !== 'all' ? (
+                <div className="mt-2 text-sm text-gray-600">
+                  Showing {filteredOverviewTasks.length} of {projectSummary.assignedTasks} tasks
+                </div>
+              ) : null}
+            </div>
 
-                    {/* Developer Tasks Table */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Task ID</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Title</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Project</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Jira</th>
-                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Hours</th>
-                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Start</th>
-                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">End</th>
+            {/* Integrated Task Table with Gantt */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1400px]">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="sticky left-0 z-30 bg-gray-50 w-8 px-2 py-3 border-r border-gray-200"></th>
+                      <th className="sticky left-8 z-30 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 min-w-[300px]">
+                        Work
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-24">
+                        Assignee
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-20">
+                        Reporter
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-20">
+                        Priority
+                      </th>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-24">
+                        Status
+                      </th>
+                      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-16">
+                        Hours
+                      </th>
+                      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-24">
+                        Start
+                      </th>
+                      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-24">
+                        End
+                      </th>
+                      <th className="px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase border-l border-gray-200" colSpan={monthColumns.length}>
+                        Gantt Timeline
+                      </th>
+                    </tr>
+                    {/* Month headers for Gantt */}
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="sticky left-0 z-30 bg-gray-50 w-8 px-2 py-2 border-r border-gray-200"></th>
+                      <th className="sticky left-8 z-30 bg-gray-50 px-4 py-2 border-r border-gray-200"></th>
+                      <th className="px-3 py-2 border-r border-gray-200"></th>
+                      <th className="px-3 py-2 border-r border-gray-200"></th>
+                      <th className="px-3 py-2 border-r border-gray-200"></th>
+                      <th className="px-3 py-2 border-r border-gray-200"></th>
+                      <th className="px-3 py-2 border-r border-gray-200"></th>
+                      <th className="px-3 py-2 border-r border-gray-200"></th>
+                      <th className="px-3 py-2 border-r border-gray-200"></th>
+                      {monthColumns.map(mc => (
+                        <th key={`${mc.year}-${mc.month}`} className="px-2 py-2 text-center text-xs font-semibold text-gray-600 uppercase border-l border-gray-200 min-w-[120px]">
+                          {mc.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {developers.map(developer => {
+                      const devTasks = filteredOverviewTasks.filter(t => t.assignedDeveloperId === developer.id);
+                      
+                      if (devTasks.length === 0) return null;
+                      
+                      const isExpanded = expandedDevelopers.has(developer.id);
+                      
+                      return (
+                        <>
+                          {/* Developer Group Header */}
+                          <tr 
+                            key={`dev-${developer.id}`}
+                            className="bg-gray-50 border-b border-gray-200 cursor-pointer hover:bg-gray-100"
+                            onClick={() => toggleDeveloperExpansion(developer.id)}
+                          >
+                            <td className="sticky left-0 z-20 bg-gray-50 w-8 px-2 py-3 border-r border-gray-200">
+                              <span className="text-gray-600">
+                                {isExpanded ? '▼' : '▶'}
+                              </span>
+                            </td>
+                            <td className="sticky left-8 z-20 bg-gray-50 px-4 py-3 border-r border-gray-200" colSpan={8}>
+                              <div className="flex items-center gap-3">
+                                <div 
+                                  className="w-4 h-4 rounded-full"
+                                  style={{ backgroundColor: developer.color }}
+                                ></div>
+                                <span className="font-semibold text-gray-900">{developer.name}</span>
+                                <span className="text-sm text-gray-500">({devTasks.length})</span>
+                              </div>
+                            </td>
+                            <td className="px-2 py-3 border-l border-gray-200" colSpan={monthColumns.length}></td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {devTasks.map(task => (
+                          
+                          {/* Task Rows */}
+                          {isExpanded && devTasks.map(task => (
                             <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm font-mono">{task.id}</td>
-                              <td className="px-4 py-3 text-sm font-medium">{task.title}</td>
-                              <td className="px-4 py-3 text-sm">{task.project}</td>
-                              <td className="px-4 py-3 text-sm">
-                                {task.jiraUrl ? (
-                                  <a
-                                    href={task.jiraUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:text-blue-800 hover:underline"
-                                  >
-                                    {extractJiraTicketId(task.jiraUrl)} ↗
-                                  </a>
-                                ) : (
-                                  <span className="text-gray-400">—</span>
-                                )}
+                              <td className="sticky left-0 z-10 bg-white w-8 px-2 py-3 border-r border-gray-200"></td>
+                              <td className="sticky left-8 z-10 bg-white px-4 py-3 border-r border-gray-200">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-blue-600 font-mono text-xs">{task.id}</span>
+                                  <span className="font-medium text-sm" title={task.title}>
+                                    {task.title.length > 40 ? task.title.substring(0, 40) + '...' : task.title}
+                                  </span>
+                                </div>
                               </td>
-                              <td className="px-4 py-3 text-sm text-center">{task.hours}h</td>
-                              <td className="px-4 py-3 text-sm text-center">{formatDate(task.startDateObj)}</td>
-                              <td className="px-4 py-3 text-sm text-center">{formatDate(task.endDateObj)}</td>
+                              <td className="px-3 py-3 text-sm border-r border-gray-200">
+                                <div className="flex items-center gap-2">
+                                  <div 
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: developer.color }}
+                                  ></div>
+                                  <span>{developer.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-3 text-sm border-r border-gray-200">{task.reporter || '—'}</td>
+                              <td className="px-3 py-3 text-sm border-r border-gray-200">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  task.priority === 'Highest' ? 'bg-red-100 text-red-800' :
+                                  task.priority === 'High' ? 'bg-orange-100 text-orange-800' :
+                                  task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {task.priority || '—'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 text-sm border-r border-gray-200">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  task.status === 'Done' ? 'bg-green-100 text-green-800' :
+                                  task.status === 'In UAT' ? 'bg-purple-100 text-purple-800' :
+                                  task.status === 'In Progress' ? 'bg-blue-100 text-blue-800' :
+                                  task.status === 'Ready' ? 'bg-cyan-100 text-cyan-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {task.status || '—'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 text-sm text-center border-r border-gray-200">{task.hours}h</td>
+                              <td className="px-3 py-3 text-sm text-center border-r border-gray-200 whitespace-nowrap">
+                                {formatDate(task.startDateObj)}
+                              </td>
+                              <td className="px-3 py-3 text-sm text-center border-r border-gray-200 whitespace-nowrap">
+                                {formatDate(task.endDateObj)}
+                              </td>
+                              {/* Gantt Bar */}
+                              {monthColumns.map(mc => {
+                                const monthStart = new Date(mc.year, mc.month, 1);
+                                const monthEnd = new Date(mc.year, mc.month + 1, 0);
+                                const daysInMonth = getDaysInMonth(mc.year, mc.month);
+                                const taskOverlapsMonth = task.startDateObj <= monthEnd && task.endDateObj >= monthStart;
+
+                                if (!taskOverlapsMonth) {
+                                  return <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12"></td>;
+                                }
+
+                                const barStart = task.startDateObj > monthStart ? task.startDateObj : monthStart;
+                                const barEnd = task.endDateObj < monthEnd ? task.endDateObj : monthEnd;
+                                const startDay = barStart.getDate();
+                                const endDay = barEnd.getDate();
+                                const leftPercent = ((startDay - 1) / daysInMonth) * 100;
+                                const widthPercent = ((endDay - startDay + 1) / daysInMonth) * 100;
+
+                                return (
+                                  <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12 relative">
+                                    <div className="h-8 relative">
+                                      <div
+                                        className="absolute top-0.5 h-[28px] rounded-md cursor-pointer hover:brightness-110"
+                                        style={{
+                                          left: `${leftPercent}%`,
+                                          width: `${widthPercent}%`,
+                                          backgroundColor: developer.color,
+                                          minWidth: '6px',
+                                        }}
+                                        onMouseEnter={(e) => handleBarMouseEnter(task, e)}
+                                        onMouseLeave={handleBarMouseLeave}
+                                      ></div>
+                                    </div>
+                                  </td>
+                                );
+                              })}
                             </tr>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })}
+                        </>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </>
         )}
@@ -1001,104 +1272,9 @@ export default function App() {
           </div>
         )}
 
-        {/* Gantt Chart */}
-        {activeTab !== 'backlog' && processedTasks.length > 0 && (
-          <div className="space-y-6">
-            {activeTab === 'overview' ? (
-              // Segmented Gantt by Developer for Overview
-              <>
-                {developers.map(developer => {
-                  const devTasks = tasksByDeveloper[developer.id] || [];
-                  
-                  if (devTasks.length === 0) return null;
-                  
-                  return (
-                    <div key={developer.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                      {/* Developer Header */}
-                      <div 
-                        className="px-6 py-3 border-b border-gray-200 flex items-center gap-3"
-                        style={{ backgroundColor: `${developer.color}15` }}
-                      >
-                        <div 
-                          className="w-4 h-4 rounded-full"
-                          style={{ backgroundColor: developer.color }}
-                        ></div>
-                        <h3 className="text-base font-semibold text-gray-900">{developer.name}</h3>
-                        <span className="text-sm text-gray-500">
-                          {devTasks.length} task{devTasks.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      
-                      {/* Gantt Table for this Developer */}
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[900px]">
-                          <thead>
-                            <tr className="bg-gray-50 border-b border-gray-200">
-                              <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-64">
-                                Task
-                              </th>
-                              {monthColumns.map(mc => (
-                                <th key={`${mc.year}-${mc.month}`} className="px-2 py-2 text-center text-xs font-semibold text-gray-600 uppercase border-l border-gray-200 min-w-[120px]">
-                                  {mc.label}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {devTasks.map(task => (
-                              <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                <td className="sticky left-0 z-10 bg-white px-4 py-3 text-sm border-r border-gray-200">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium">{task.title}</span>
-                                  </div>
-                                </td>
-                                {monthColumns.map(mc => {
-                                  const monthStart = new Date(mc.year, mc.month, 1);
-                                  const monthEnd = new Date(mc.year, mc.month + 1, 0);
-                                  const daysInMonth = getDaysInMonth(mc.year, mc.month);
-                                  const taskOverlapsMonth = task.startDateObj <= monthEnd && task.endDateObj >= monthStart;
-
-                                  if (!taskOverlapsMonth) {
-                                    return <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12"></td>;
-                                  }
-
-                                  const barStart = task.startDateObj > monthStart ? task.startDateObj : monthStart;
-                                  const barEnd = task.endDateObj < monthEnd ? task.endDateObj : monthEnd;
-                                  const startDay = barStart.getDate();
-                                  const endDay = barEnd.getDate();
-                                  const leftPercent = ((startDay - 1) / daysInMonth) * 100;
-                                  const widthPercent = ((endDay - startDay + 1) / daysInMonth) * 100;
-
-                                  return (
-                                    <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12 relative">
-                                      <div className="h-8 relative">
-                                        <div
-                                          className="absolute top-0.5 h-[28px] rounded-md cursor-pointer hover:brightness-110"
-                                          style={{
-                                            left: `${leftPercent}%`,
-                                            width: `${widthPercent}%`,
-                                            backgroundColor: developer.color,
-                                            minWidth: '6px',
-                                          }}
-                                          onMouseEnter={(e) => handleBarMouseEnter(task, e)}
-                                          onMouseLeave={handleBarMouseLeave}
-                                        ></div>
-                                      </div>
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })}
-              </>
-            ) : (
-              // Single Developer Gantt
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {/* Gantt Chart - Only for individual developer tabs */}
+        {activeTab !== 'backlog' && activeTab !== 'overview' && processedTasks.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[900px]">
                     <thead>
@@ -1161,8 +1337,6 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
           </div>
         )}
       </main>

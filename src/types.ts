@@ -7,6 +7,11 @@ export interface Task {
   startDate: string; // ISO format YYYY-MM-DD
   endDate: string; // ISO format YYYY-MM-DD (calculated)
   assignedDeveloperId: string | null; // null means in backlog
+  priority?: 'Low' | 'Medium' | 'High' | 'Highest';
+  status?: 'Backlog' | 'Ready' | 'In Progress' | 'In UAT' | 'Done';
+  reporter?: string;
+  resolution?: 'Unresolved' | 'Fixed' | 'Won\'t Fix' | 'Duplicate';
+  created?: string; // ISO date string
 }
 
 export interface Developer {
