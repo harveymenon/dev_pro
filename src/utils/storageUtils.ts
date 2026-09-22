@@ -228,15 +228,15 @@ async function saveTasks(tasks: Task[]): Promise<void> {
     
     for (const task of tasks) {
       // For backward compatibility, also set developer_id
-      // Use assigned_developer_id if available, otherwise use empty string
-      // This ensures we never send null to a NOT NULL column
-      const developerId = task.assignedDeveloperId || '';
+      // Use null when no developer is assigned (not empty string)
+      // Empty string violates foreign key constraint
+      const developerId = task.assignedDeveloperId || null;
       
       console.log('📝 Processing task:', task.id, {
         assignedDeveloperId: task.assignedDeveloperId,
         developerId: developerId,
         developerIdType: typeof developerId,
-        developerIdIsEmpty: developerId === ''
+        developerIdIsNull: developerId === null
       });
       
       if (existingIds.has(task.id)) {
@@ -248,7 +248,7 @@ async function saveTasks(tasks: Task[]): Promise<void> {
           start_date: task.startDate,
           end_date: task.endDate,
           assigned_developer_id: task.assignedDeveloperId,
-          developer_id: developerId, // backward compatibility
+          developer_id: developerId, // backward compatibility - use null not empty string
           updated_at: new Date().toISOString(),
         };
         
@@ -281,7 +281,7 @@ async function saveTasks(tasks: Task[]): Promise<void> {
           start_date: task.startDate,
           end_date: task.endDate,
           assigned_developer_id: task.assignedDeveloperId,
-          developer_id: developerId, // backward compatibility
+          developer_id: developerId, // backward compatibility - use null not empty string
         };
         
         console.log('📥 Inserting task', task.id, {
