@@ -283,6 +283,27 @@ export default function App() {
     return getDeveloperTasks(processedTasks, activeTab);
   }, [processedTasks, activeTab]);
 
+  // Group tasks by developer for Overview
+  const tasksByDeveloper = useMemo(() => {
+    if (activeTab !== 'overview') return {};
+    
+    const grouped: { [key: string]: ProcessedTask[] } = {};
+    
+    // Initialize with all developers
+    developers.forEach(dev => {
+      grouped[dev.id] = [];
+    });
+    
+    // Group tasks by developer
+    processedTasks.forEach(task => {
+      if (task.assignedDeveloperId && grouped[task.assignedDeveloperId]) {
+        grouped[task.assignedDeveloperId].push(task);
+      }
+    });
+    
+    return grouped;
+  }, [processedTasks, developers, activeTab]);
+
   // Calculate timeline range
   const timelineRange = useMemo(() => {
     const tasksToShow = activeTab === 'overview' 
@@ -474,7 +495,17 @@ export default function App() {
 
   // Handle unassign task
   const handleUnassignTask = useCallback((taskId: string) => {
-    setTasks(prev => unassignTask(prev, taskId));
+    console.log('🔓 Unassigning task:', taskId);
+    setTasks(prev => {
+      const updated = unassignTask(prev, taskId);
+      const task = updated.find(t => t.id === taskId);
+      console.log('✅ Task unassigned:', {
+        taskId,
+        newAssignedDeveloperId: task?.assignedDeveloperId,
+        totalTasks: updated.length
+      });
+      return updated;
+    });
   }, []);
 
   // Handle open edit task modal
@@ -754,6 +785,90 @@ export default function App() {
             >
               Export All to Excel
             </button>
+
+            {/* Developer Segments */}
+            <div className="space-y-6">
+              {developers.map(developer => {
+                const devTasks = tasksByDeveloper[developer.id] || [];
+                const devSummary = calculateDeveloperSummary(tasks, developer.id, workingHoursPerDay);
+                
+                if (devTasks.length === 0) return null;
+                
+                return (
+                  <div key={developer.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    {/* Developer Header */}
+                    <div 
+                      className="px-6 py-4 border-b border-gray-200"
+                      style={{ backgroundColor: `${developer.color}15` }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="w-4 h-4 rounded-full"
+                            style={{ backgroundColor: developer.color }}
+                          ></div>
+                          <h3 className="text-lg font-semibold text-gray-900">{developer.name}</h3>
+                          <span className="text-sm text-gray-500">
+                            {devTasks.length} task{devTasks.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                          <div>
+                            <span className="font-medium">{devSummary.totalHours}</span> hours
+                          </div>
+                          <div>
+                            <span className="font-medium">{devSummary.totalWorkingDays}</span> working days
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Developer Tasks Table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Task ID</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Title</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Project</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Jira</th>
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Hours</th>
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Start</th>
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">End</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {devTasks.map(task => (
+                            <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="px-4 py-3 text-sm font-mono">{task.id}</td>
+                              <td className="px-4 py-3 text-sm font-medium">{task.title}</td>
+                              <td className="px-4 py-3 text-sm">{task.project}</td>
+                              <td className="px-4 py-3 text-sm">
+                                {task.jiraUrl ? (
+                                  <a
+                                    href={task.jiraUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 hover:underline"
+                                  >
+                                    {extractJiraTicketId(task.jiraUrl)} ↗
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-center">{task.hours}h</td>
+                              <td className="px-4 py-3 text-sm text-center">{formatDate(task.startDateObj)}</td>
+                              <td className="px-4 py-3 text-sm text-center">{formatDate(task.endDateObj)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </>
         )}
 
@@ -888,72 +1003,166 @@ export default function App() {
 
         {/* Gantt Chart */}
         {activeTab !== 'backlog' && processedTasks.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="sticky left-0 z-20 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-64">
-                      {activeTab === 'overview' ? 'Developer / Task' : 'Task'}
-                    </th>
-                    {monthColumns.map(mc => (
-                      <th key={`${mc.year}-${mc.month}`} className="px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase border-l border-gray-200 min-w-[120px]">
-                        {mc.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(activeTab === 'overview' ? processedTasks.filter(t => t.assignedDeveloperId) : activeDeveloperTasks).map(task => (
-                    <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="sticky left-0 z-10 bg-white px-4 py-3 text-sm border-r border-gray-200">
-                        <div className="flex items-center gap-2">
-                          {task.developerColor && (
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: task.developerColor }}></span>
-                          )}
-                          <span className="font-medium">{task.title}</span>
-                        </div>
-                      </td>
-                      {monthColumns.map(mc => {
-                        const monthStart = new Date(mc.year, mc.month, 1);
-                        const monthEnd = new Date(mc.year, mc.month + 1, 0);
-                        const daysInMonth = getDaysInMonth(mc.year, mc.month);
-                        const taskOverlapsMonth = task.startDateObj <= monthEnd && task.endDateObj >= monthStart;
+          <div className="space-y-6">
+            {activeTab === 'overview' ? (
+              // Segmented Gantt by Developer for Overview
+              <>
+                {developers.map(developer => {
+                  const devTasks = tasksByDeveloper[developer.id] || [];
+                  
+                  if (devTasks.length === 0) return null;
+                  
+                  return (
+                    <div key={developer.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                      {/* Developer Header */}
+                      <div 
+                        className="px-6 py-3 border-b border-gray-200 flex items-center gap-3"
+                        style={{ backgroundColor: `${developer.color}15` }}
+                      >
+                        <div 
+                          className="w-4 h-4 rounded-full"
+                          style={{ backgroundColor: developer.color }}
+                        ></div>
+                        <h3 className="text-base font-semibold text-gray-900">{developer.name}</h3>
+                        <span className="text-sm text-gray-500">
+                          {devTasks.length} task{devTasks.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      
+                      {/* Gantt Table for this Developer */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[900px]">
+                          <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200">
+                              <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-64">
+                                Task
+                              </th>
+                              {monthColumns.map(mc => (
+                                <th key={`${mc.year}-${mc.month}`} className="px-2 py-2 text-center text-xs font-semibold text-gray-600 uppercase border-l border-gray-200 min-w-[120px]">
+                                  {mc.label}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {devTasks.map(task => (
+                              <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                <td className="sticky left-0 z-10 bg-white px-4 py-3 text-sm border-r border-gray-200">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{task.title}</span>
+                                  </div>
+                                </td>
+                                {monthColumns.map(mc => {
+                                  const monthStart = new Date(mc.year, mc.month, 1);
+                                  const monthEnd = new Date(mc.year, mc.month + 1, 0);
+                                  const daysInMonth = getDaysInMonth(mc.year, mc.month);
+                                  const taskOverlapsMonth = task.startDateObj <= monthEnd && task.endDateObj >= monthStart;
 
-                        if (!taskOverlapsMonth) {
-                          return <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12"></td>;
-                        }
+                                  if (!taskOverlapsMonth) {
+                                    return <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12"></td>;
+                                  }
 
-                        const barStart = task.startDateObj > monthStart ? task.startDateObj : monthStart;
-                        const barEnd = task.endDateObj < monthEnd ? task.endDateObj : monthEnd;
-                        const startDay = barStart.getDate();
-                        const endDay = barEnd.getDate();
-                        const leftPercent = ((startDay - 1) / daysInMonth) * 100;
-                        const widthPercent = ((endDay - startDay + 1) / daysInMonth) * 100;
+                                  const barStart = task.startDateObj > monthStart ? task.startDateObj : monthStart;
+                                  const barEnd = task.endDateObj < monthEnd ? task.endDateObj : monthEnd;
+                                  const startDay = barStart.getDate();
+                                  const endDay = barEnd.getDate();
+                                  const leftPercent = ((startDay - 1) / daysInMonth) * 100;
+                                  const widthPercent = ((endDay - startDay + 1) / daysInMonth) * 100;
 
-                        return (
-                          <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12 relative">
-                            <div className="h-8 relative">
-                              <div
-                                className="absolute top-0.5 h-[28px] rounded-md cursor-pointer hover:brightness-110"
-                                style={{
-                                  left: `${leftPercent}%`,
-                                  width: `${widthPercent}%`,
-                                  backgroundColor: task.developerColor || '#6B7280',
-                                  minWidth: '6px',
-                                }}
-                                onMouseEnter={(e) => handleBarMouseEnter(task, e)}
-                                onMouseLeave={handleBarMouseLeave}
-                              ></div>
+                                  return (
+                                    <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12 relative">
+                                      <div className="h-8 relative">
+                                        <div
+                                          className="absolute top-0.5 h-[28px] rounded-md cursor-pointer hover:brightness-110"
+                                          style={{
+                                            left: `${leftPercent}%`,
+                                            width: `${widthPercent}%`,
+                                            backgroundColor: developer.color,
+                                            minWidth: '6px',
+                                          }}
+                                          onMouseEnter={(e) => handleBarMouseEnter(task, e)}
+                                          onMouseLeave={handleBarMouseLeave}
+                                        ></div>
+                                      </div>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            ) : (
+              // Single Developer Gantt
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px]">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="sticky left-0 z-20 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase border-r border-gray-200 w-64">
+                          Task
+                        </th>
+                        {monthColumns.map(mc => (
+                          <th key={`${mc.year}-${mc.month}`} className="px-2 py-3 text-center text-xs font-semibold text-gray-600 uppercase border-l border-gray-200 min-w-[120px]">
+                            {mc.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeDeveloperTasks.map(task => (
+                        <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="sticky left-0 z-10 bg-white px-4 py-3 text-sm border-r border-gray-200">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{task.title}</span>
                             </div>
                           </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          {monthColumns.map(mc => {
+                            const monthStart = new Date(mc.year, mc.month, 1);
+                            const monthEnd = new Date(mc.year, mc.month + 1, 0);
+                            const daysInMonth = getDaysInMonth(mc.year, mc.month);
+                            const taskOverlapsMonth = task.startDateObj <= monthEnd && task.endDateObj >= monthStart;
+
+                            if (!taskOverlapsMonth) {
+                              return <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12"></td>;
+                            }
+
+                            const barStart = task.startDateObj > monthStart ? task.startDateObj : monthStart;
+                            const barEnd = task.endDateObj < monthEnd ? task.endDateObj : monthEnd;
+                            const startDay = barStart.getDate();
+                            const endDay = barEnd.getDate();
+                            const leftPercent = ((startDay - 1) / daysInMonth) * 100;
+                            const widthPercent = ((endDay - startDay + 1) / daysInMonth) * 100;
+
+                            return (
+                              <td key={`${mc.year}-${mc.month}`} className="px-1 py-3 border-l border-gray-200 h-12 relative">
+                                <div className="h-8 relative">
+                                  <div
+                                    className="absolute top-0.5 h-[28px] rounded-md cursor-pointer hover:brightness-110"
+                                    style={{
+                                      left: `${leftPercent}%`,
+                                      width: `${widthPercent}%`,
+                                      backgroundColor: task.developerColor || '#6B7280',
+                                      minWidth: '6px',
+                                    }}
+                                    onMouseEnter={(e) => handleBarMouseEnter(task, e)}
+                                    onMouseLeave={handleBarMouseLeave}
+                                  ></div>
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
