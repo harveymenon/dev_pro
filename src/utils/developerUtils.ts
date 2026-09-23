@@ -124,7 +124,17 @@ export function createTask(
   tasks: Task[],
   taskData: Task
 ): Task[] {
-  return [...tasks, taskData];
+  // Calculate sortOrder for the new task
+  const developerTasks = tasks.filter(t => t.assignedDeveloperId === taskData.assignedDeveloperId);
+  const maxSortOrder = developerTasks.reduce((max, t) => Math.max(max, t.sortOrder ?? 0), -1);
+  const newSortOrder = maxSortOrder + 1;
+  
+  const newTask = {
+    ...taskData,
+    sortOrder: newSortOrder,
+  };
+  
+  return [...tasks, newTask];
 }
 
 /**
@@ -181,6 +191,26 @@ export function unassignTask(tasks: Task[], taskId: string): Task[] {
 }
 
 /**
+ * Reorder tasks within a developer's board
+ */
+export function reorderTasks(tasks: Task[], activeId: string, overId: string): Task[] {
+  const oldIndex = tasks.findIndex(t => t.id === activeId);
+  const newIndex = tasks.findIndex(t => t.id === overId);
+  
+  if (oldIndex === -1 || newIndex === -1) return tasks;
+  
+  const result = [...tasks];
+  const [removed] = result.splice(oldIndex, 1);
+  result.splice(newIndex, 0, removed);
+  
+  // Update sortOrder for all tasks
+  return result.map((task, index) => ({
+    ...task,
+    sortOrder: index,
+  }));
+}
+
+/**
  * Recalculate all end dates for all tasks
  */
 export function recalculateAllEndDates(tasks: Task[], workingHoursPerDay: number): Task[] {
@@ -202,7 +232,9 @@ export function getBacklogTasks<T extends Task>(tasks: T[]): T[] {
  * Get tasks for a specific developer
  */
 export function getDeveloperTasks<T extends Task>(tasks: T[], developerId: string): T[] {
-  return tasks.filter(task => task.assignedDeveloperId === developerId);
+  return tasks
+    .filter(task => task.assignedDeveloperId === developerId)
+    .sort((a, b) => (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999));
 }
 
 /**

@@ -32,6 +32,7 @@ export async function fetchAppState(): Promise<AppState | null> {
     const { data: tasks, error: taskError } = await supabase
       .from('tasks')
       .select('*')
+      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true });
 
     if (taskError) {
@@ -74,6 +75,7 @@ export async function fetchAppState(): Promise<AppState | null> {
         startDate: task.start_date || new Date().toISOString().split('T')[0],
         endDate: task.end_date || new Date().toISOString().split('T')[0],
         assignedDeveloperId: task.assigned_developer_id || null,
+        sortOrder: task.sort_order ?? undefined,
       };
     });
 
@@ -249,6 +251,7 @@ async function saveTasks(tasks: Task[]): Promise<void> {
           end_date: task.endDate,
           assigned_developer_id: task.assignedDeveloperId,
           developer_id: developerId, // backward compatibility - use null not empty string
+          sort_order: task.sortOrder ?? null,
           updated_at: new Date().toISOString(),
         };
         
@@ -282,6 +285,7 @@ async function saveTasks(tasks: Task[]): Promise<void> {
           end_date: task.endDate,
           assigned_developer_id: task.assignedDeveloperId,
           developer_id: developerId, // backward compatibility - use null not empty string
+          sort_order: task.sortOrder ?? null,
         };
         
         console.log('📥 Inserting task', task.id, {

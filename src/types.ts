@@ -12,6 +12,7 @@ export interface Task {
   reporter?: string;
   resolution?: 'Unresolved' | 'Fixed' | 'Won\'t Fix' | 'Duplicate';
   created?: string; // ISO date string
+  sortOrder?: number; // Order within developer's board
 }
 
 export interface Developer {

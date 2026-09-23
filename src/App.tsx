@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { Developer, Task, ProcessedTask, MonthColumn, AppState } from './types';
 import {
   calculateEndDate,
@@ -34,6 +36,7 @@ import {
   getDeveloperById,
   validateJiraUrl,
   extractJiraTicketId,
+  reorderTasks,
 } from './utils/developerUtils';
 import {
   saveAppState,
@@ -45,6 +48,7 @@ import {
   exportAllDevelopersToExcel,
 } from './utils/excelUtils';
 import ImportModal from './components/ImportModal';
+import SortableTaskRow from './components/SortableTaskRow';
 
 // Sample data
 const SAMPLE_DEVELOPERS: Developer[] = [
@@ -605,6 +609,22 @@ export default function App() {
       });
       return updated;
     });
+  }, []);
+
+  // Handle drag end for task reordering
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) {
+      return;
+    }
+    
+    console.log('🔀 Reordering task:', {
+      from: active.id,
+      to: over.id
+    });
+    
+    setTasks(prev => reorderTasks(prev, active.id as string, over.id as string));
   }, []);
 
   // Handle open edit task modal
@@ -1245,23 +1265,42 @@ export default function App() {
 
         {activeDeveloper && activeDeveloperTasks.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Task ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Title</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Project</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Jira</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Hours</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Start</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">End</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeDeveloperTasks.map(task => renderTaskRow(task, false))}
-              </tbody>
-            </table>
+            <DndContext
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={activeDeveloperTasks.map(t => t.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-2 py-3 w-10"></th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Task ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Title</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Project</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Jira</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Hours</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Start</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">End</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeDeveloperTasks.map(task => (
+                      <SortableTaskRow
+                        key={task.id}
+                        task={task}
+                        onEdit={handleOpenEditTask}
+                        onUnassign={handleUnassignTask}
+                        onDelete={(taskId) => setDeleteTaskConfirm(taskId)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </SortableContext>
+            </DndContext>
           </div>
         )}
 
