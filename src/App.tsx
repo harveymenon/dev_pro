@@ -247,13 +247,6 @@ export default function App() {
     }
   }, [developers, tasks, projects, workingHoursPerDay, isLoading]);
 
-  // Recalculate end dates when working hours change
-  useEffect(() => {
-    if (!isLoading) {
-      setTasks(prev => recalculateAllEndDates(prev, workingHoursPerDay));
-    }
-  }, [workingHoursPerDay, isLoading]);
-
   // Modal states
   const [showAddDeveloper, setShowAddDeveloper] = useState(false);
   const [newDeveloperName, setNewDeveloperName] = useState('');
