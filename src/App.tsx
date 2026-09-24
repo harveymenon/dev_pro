@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { Developer, Task, ProcessedTask, MonthColumn, AppState } from './types';
+import { Developer, Task, ProcessedTask, MonthColumn, AppState, TimesheetEntry } from './types';
 import {
   calculateEndDate,
   generateMonthsBetween,
@@ -49,6 +49,8 @@ import {
 } from './utils/excelUtils';
 import ImportModal from './components/ImportModal';
 import SortableTaskRow from './components/SortableTaskRow';
+import TimesheetImportModal from './components/TimesheetImportModal';
+import TimesheetDashboard from './components/TimesheetDashboard';
 
 // Sample data
 const SAMPLE_DEVELOPERS: Developer[] = [
@@ -174,6 +176,8 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<string[]>(DEFAULT_PROJECTS);
   const [workingHoursPerDay, setWorkingHoursPerDay] = useState<number>(8);
+  const [standardWeeklyHours, setStandardWeeklyHours] = useState<number>(40);
+  const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
   const [activeTab, setActiveTab] = useState<string>('overview');
 
   // Initialize state with sample data or load from Supabase
@@ -190,12 +194,15 @@ export default function App() {
             console.log('✅ Loaded data from Supabase:', {
               developers: appState.developers.length,
               tasks: appState.tasks.length,
+              timesheetEntries: appState.timesheetEntries.length,
               projects: appState.projects.length
             });
             setDevelopers(appState.developers);
             setTasks(appState.tasks);
+            setTimesheetEntries(appState.timesheetEntries || []);
             setProjects(appState.projects.length > 0 ? appState.projects : DEFAULT_PROJECTS);
             setWorkingHoursPerDay(appState.workingHoursPerDay);
+            setStandardWeeklyHours(appState.standardWeeklyHours || 40);
             setIsLoading(false);
             return;
           } else {
@@ -243,13 +250,15 @@ export default function App() {
       
       const appState: AppState = {
         workingHoursPerDay,
+        standardWeeklyHours,
         developers,
         tasks,
+        timesheetEntries,
         projects,
       };
       saveAppState(appState);
     }
-  }, [developers, tasks, projects, workingHoursPerDay, isLoading]);
+  }, [developers, tasks, timesheetEntries, projects, workingHoursPerDay, standardWeeklyHours, isLoading]);
 
   // Modal states
   const [showAddDeveloper, setShowAddDeveloper] = useState(false);
@@ -280,6 +289,7 @@ export default function App() {
 
   // Import modal
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showTimesheetImportModal, setShowTimesheetImportModal] = useState(false);
 
   // Overview filters and search
   const [overviewSearch, setOverviewSearch] = useState('');
@@ -588,6 +598,20 @@ export default function App() {
     setShowImportModal(false);
   }, []);
 
+  // Handle import timesheet entries
+  const handleImportTimesheetEntries = useCallback((importedEntries: TimesheetEntry[]) => {
+    console.log('📥 Importing', importedEntries.length, 'timesheet entries');
+    
+    // Add all imported entries to the state
+    setTimesheetEntries(prev => {
+      const newEntries = [...prev, ...importedEntries];
+      console.log('✅ Timesheet entries imported, total count:', newEntries.length);
+      return newEntries;
+    });
+    
+    setShowTimesheetImportModal(false);
+  }, []);
+
   // Handle assign task
   const handleAssignTask = useCallback(() => {
     if (!assigningTaskId || !assigningToDeveloper) return;
@@ -830,6 +854,14 @@ export default function App() {
               }`}
             >
               Backlog ({backlogTasks.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('timesheet')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap ${
+                activeTab === 'timesheet' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              📊 Timesheet Dashboard ({timesheetEntries.length})
             </button>
             {developers.map(dev => (
               <div key={dev.id} className="flex items-center gap-1">
@@ -1187,6 +1219,48 @@ export default function App() {
                 📥 Import Tasks
               </button>
             </div>
+          </>
+        )}
+
+        {/* Timesheet Dashboard Tab */}
+        {activeTab === 'timesheet' && (
+          <>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Timesheet Dashboard</h2>
+                <p className="text-sm text-gray-500 mt-1">Developer performance analytics and timesheet tracking</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowTimesheetImportModal(true)}
+                  className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+                >
+                  📥 Import Timesheet
+                </button>
+              </div>
+            </div>
+
+            {timesheetEntries.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                </svg>
+                <h3 className="text-lg font-medium text-gray-600 mb-2">No timesheet data yet</h3>
+                <p className="text-gray-400 mb-4">Import timesheet data to see developer performance analytics</p>
+                <button
+                  onClick={() => setShowTimesheetImportModal(true)}
+                  className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+                >
+                  📥 Import Timesheet
+                </button>
+              </div>
+            ) : (
+              <TimesheetDashboard
+                entries={timesheetEntries}
+                developers={developers}
+                standardWeeklyHours={standardWeeklyHours}
+              />
+            )}
           </>
         )}
 
@@ -1651,6 +1725,14 @@ export default function App() {
         onImport={handleImportTasks}
         existingTaskIds={tasks.map(t => t.id)}
         existingDeveloperIds={developers.map(d => d.id)}
+      />
+
+      {/* Import Timesheet Modal */}
+      <TimesheetImportModal
+        isOpen={showTimesheetImportModal}
+        onClose={() => setShowTimesheetImportModal(false)}
+        onImport={handleImportTimesheetEntries}
+        existingEntryIds={new Set(timesheetEntries.map(e => e.id))}
       />
 
       {/* Tooltip */}

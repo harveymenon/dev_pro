@@ -1,6 +1,6 @@
 // Supabase storage utility functions for centralized task architecture
 import { supabase, isSupabaseEnabled } from './supabaseClient';
-import { Developer, Task, AppState } from '../types';
+import { Developer, Task, AppState, TimesheetEntry } from '../types';
 
 /**
  * Fetch complete app state from Supabase
@@ -53,8 +53,21 @@ export async function fetchAppState(): Promise<AppState | null> {
     }
     console.log('✅ Fetched settings:', settingsData?.length || 0, 'entries');
 
+    // Fetch timesheet entries
+    console.log('📡 Fetching timesheet entries...');
+    const { data: timesheetEntries, error: timesheetError } = await supabase
+      .from('timesheet_entries')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (timesheetError) {
+      console.error('❌ Error fetching timesheet entries:', timesheetError);
+    }
+    console.log('✅ Fetched', timesheetEntries?.length || 0, 'timesheet entries');
+
     // Parse settings
     const workingHoursPerDay = settingsData?.find(s => s.key === 'working_hours_per_day')?.value || '8';
+    const standardWeeklyHours = settingsData?.find(s => s.key === 'standard_weekly_hours')?.value || '40';
     const projectsData = settingsData?.find(s => s.key === 'projects')?.value || '[]';
 
     // Transform tasks from Supabase format to app format
@@ -79,10 +92,32 @@ export async function fetchAppState(): Promise<AppState | null> {
       };
     });
 
+    // Transform timesheet entries from Supabase format to app format
+    const transformedTimesheetEntries: TimesheetEntry[] = (timesheetEntries || []).map((entry: any) => ({
+      id: entry.id,
+      date: entry.date,
+      taskId: entry.task_id,
+      taskTitle: entry.task_title,
+      hoursSpent: entry.hours_spent,
+      portal: entry.portal || '',
+      environment: entry.environment || 'Other',
+      description: entry.description || '',
+      developerId: entry.developer_id,
+      developerName: entry.developer_name,
+      weekNumber: entry.week_number,
+      weekStartDate: entry.week_start_date,
+      weekEndDate: entry.week_end_date,
+      month: entry.month,
+      year: entry.year,
+      importedAt: entry.imported_at,
+    }));
+
     const appState = {
       workingHoursPerDay: parseInt(workingHoursPerDay, 10),
+      standardWeeklyHours: parseInt(standardWeeklyHours, 10),
       developers: developers || [],
       tasks: transformedTasks,
+      timesheetEntries: transformedTimesheetEntries,
       projects: JSON.parse(projectsData),
     };
 
@@ -108,7 +143,9 @@ export async function saveAppState(appState: AppState): Promise<void> {
   console.log('  - Supabase client:', supabase ? '✓ Available' : '✗ Not available');
   console.log('  - Developers:', appState.developers.length);
   console.log('  - Tasks:', appState.tasks.length);
+  console.log('  - Timesheet Entries:', appState.timesheetEntries.length);
   console.log('  - Working Hours:', appState.workingHoursPerDay);
+  console.log('  - Standard Weekly Hours:', appState.standardWeeklyHours);
   console.log('  - Projects:', appState.projects.length);
 
   if (!supabase) {
@@ -123,8 +160,12 @@ export async function saveAppState(appState: AppState): Promise<void> {
     console.log('🔄 Saving tasks...');
     await saveTasks(appState.tasks);
 
+    console.log('🔄 Saving timesheet entries...');
+    await saveTimesheetEntries(appState.timesheetEntries);
+
     console.log('🔄 Saving settings...');
     await saveWorkingHours(appState.workingHoursPerDay);
+    await saveStandardWeeklyHours(appState.standardWeeklyHours);
     await saveProjects(appState.projects);
 
     console.log('✅ App state saved successfully to Supabase');
@@ -350,6 +391,153 @@ export async function saveWorkingHours(hours: number): Promise<void> {
     }
   } catch (error) {
     console.error('Error saving working hours:', error);
+  }
+}
+
+/**
+ * Save standard weekly hours to Supabase
+ */
+export async function saveStandardWeeklyHours(hours: number): Promise<void> {
+  console.log('💾 Attempting to save standard weekly hours:', hours);
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, skipping save');
+    return;
+  }
+
+  try {
+    const { data: existing } = await supabase
+      .from('settings')
+      .select('key')
+      .eq('key', 'standard_weekly_hours')
+      .single();
+
+    if (existing) {
+      await supabase
+        .from('settings')
+        .update({
+          value: String(hours),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('key', 'standard_weekly_hours');
+    } else {
+      await supabase
+        .from('settings')
+        .insert({
+          key: 'standard_weekly_hours',
+          value: String(hours),
+        });
+    }
+  } catch (error) {
+    console.error('Error saving standard weekly hours:', error);
+  }
+}
+
+/**
+ * Save timesheet entries to Supabase
+ */
+export async function saveTimesheetEntries(entries: TimesheetEntry[]): Promise<void> {
+  console.log('💾 Saving timesheet entries to Supabase...', entries.length, 'entries');
+  
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, skipping timesheet save');
+    return;
+  }
+
+  try {
+    // Get existing timesheet entries
+    const { data: existingEntries, error: fetchError } = await supabase
+      .from('timesheet_entries')
+      .select('id');
+
+    if (fetchError) {
+      console.error('❌ Error fetching existing timesheet entries:', fetchError);
+      return;
+    }
+
+    const existingIds = new Set(existingEntries?.map((e: any) => e.id) || []);
+    const currentIds = new Set(entries.map(e => e.id));
+
+    console.log('📊 Existing timesheet entries:', existingIds.size, 'Current entries:', currentIds.size);
+
+    // Delete removed entries
+    const toDelete = Array.from(existingIds).filter(id => !currentIds.has(id));
+    if (toDelete.length > 0) {
+      console.log('🗑️ Deleting', toDelete.length, 'removed timesheet entries');
+      const { error: deleteError } = await supabase
+        .from('timesheet_entries')
+        .delete()
+        .in('id', toDelete);
+      
+      if (deleteError) {
+        console.error('❌ Error deleting timesheet entries:', deleteError);
+      }
+    }
+
+    // Upsert entries
+    let inserted = 0;
+    let updated = 0;
+    
+    for (const entry of entries) {
+      if (existingIds.has(entry.id)) {
+        const { error: updateError } = await supabase
+          .from('timesheet_entries')
+          .update({
+            date: entry.date,
+            task_id: entry.taskId,
+            task_title: entry.taskTitle,
+            hours_spent: entry.hoursSpent,
+            portal: entry.portal,
+            environment: entry.environment,
+            description: entry.description,
+            developer_id: entry.developerId,
+            developer_name: entry.developerName,
+            week_number: entry.weekNumber,
+            week_start_date: entry.weekStartDate,
+            week_end_date: entry.weekEndDate,
+            month: entry.month,
+            year: entry.year,
+            imported_at: entry.importedAt,
+          })
+          .eq('id', entry.id);
+        
+        if (updateError) {
+          console.error('❌ Error updating timesheet entry', entry.id, ':', updateError);
+        } else {
+          updated++;
+        }
+      } else {
+        const { error: insertError } = await supabase
+          .from('timesheet_entries')
+          .insert({
+            id: entry.id,
+            date: entry.date,
+            task_id: entry.taskId,
+            task_title: entry.taskTitle,
+            hours_spent: entry.hoursSpent,
+            portal: entry.portal,
+            environment: entry.environment,
+            description: entry.description,
+            developer_id: entry.developerId,
+            developer_name: entry.developerName,
+            week_number: entry.weekNumber,
+            week_start_date: entry.weekStartDate,
+            week_end_date: entry.weekEndDate,
+            month: entry.month,
+            year: entry.year,
+            imported_at: entry.importedAt,
+          });
+        
+        if (insertError) {
+          console.error('❌ Error inserting timesheet entry', entry.id, ':', insertError);
+        } else {
+          inserted++;
+        }
+      }
+    }
+    
+    console.log('✅ Timesheet entries saved successfully - Inserted:', inserted, 'Updated:', updated);
+  } catch (error) {
+    console.error('❌ Error in saveTimesheetEntries:', error);
   }
 }
 

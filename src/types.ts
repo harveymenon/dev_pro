@@ -64,7 +64,65 @@ export interface BacklogSummary {
 
 export interface AppState {
   workingHoursPerDay: number;
+  standardWeeklyHours: number;
   developers: Developer[];
   tasks: Task[];
+  timesheetEntries: TimesheetEntry[];
   projects: string[];
+}
+
+export interface TimesheetEntry {
+  id: string;
+  date: string; // ISO format YYYY-MM-DD
+  taskId: string;
+  taskTitle: string;
+  hoursSpent: number;
+  portal: string;
+  environment: 'DEV' | 'UAT' | 'PROD' | 'Other';
+  description: string;
+  developerId: string;
+  developerName: string;
+  weekNumber: number;
+  weekStartDate: string;
+  weekEndDate: string;
+  month: number;
+  year: number;
+  importedAt: string;
+}
+
+export interface WeeklySummary {
+  developerId: string;
+  developerName: string;
+  weekNumber: number;
+  weekStartDate: string;
+  weekEndDate: string;
+  totalHours: number;
+  taskCount: number;
+  uniqueTasks: number;
+  avgHoursPerTask: number;
+  utilization: number;
+  tasks: TimesheetEntry[];
+}
+
+export interface DeveloperPerformance {
+  developerId: string;
+  developerName: string;
+  totalHours: number;
+  totalTasks: number;
+  avgHoursPerTask: number;
+  avgUtilization: number;
+  weeks: WeeklySummary[];
+  projectDistribution: { [project: string]: number };
+  environmentDistribution: { [env: string]: number };
+}
+
+export interface DashboardKPIs {
+  totalDevelopers: number;
+  totalHours: number;
+  avgHoursPerDeveloper: number;
+  totalTasks: number;
+  avgWeeklyHours: number;
+  overallUtilization: number;
+  hoursThisWeek: number;
+  hoursLastWeek: number;
 }
