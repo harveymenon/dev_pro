@@ -10,14 +10,12 @@ interface TimesheetImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (entries: TimesheetEntry[]) => void;
-  existingEntryIds: Set<string>;
 }
 
 export default function TimesheetImportModal({ 
   isOpen, 
   onClose, 
   onImport, 
-  existingEntryIds 
 }: TimesheetImportModalProps) {
   const [preview, setPreview] = useState<TimesheetImportPreview | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -46,7 +44,7 @@ export default function TimesheetImportModal({
     setPreview(null);
 
     try {
-      const result = await parseTimesheetExcel(file, existingEntryIds);
+      const result = await parseTimesheetExcel(file);
       setPreview(result);
     } catch (err) {
       setError(`Failed to parse file: ${err}`);

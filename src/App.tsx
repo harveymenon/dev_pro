@@ -1732,7 +1732,6 @@ export default function App() {
         isOpen={showTimesheetImportModal}
         onClose={() => setShowTimesheetImportModal(false)}
         onImport={handleImportTimesheetEntries}
-        existingEntryIds={new Set(timesheetEntries.map(e => e.id))}
       />
 
       {/* Tooltip */}

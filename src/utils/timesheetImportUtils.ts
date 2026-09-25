@@ -40,10 +40,11 @@ export interface TimesheetImportPreview {
 
 /**
  * Parse a timesheet Excel file and extract entries
+ * Note: Duplicate task IDs are allowed - developers can log multiple entries
+ * for the same task on the same day or across different days
  */
 export async function parseTimesheetExcel(
-  file: File,
-  existingEntryIds: Set<string>
+  file: File
 ): Promise<TimesheetImportPreview> {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -80,7 +81,6 @@ export async function parseTimesheetExcel(
         const entries: TimesheetEntry[] = [];
         const errors: TimesheetImportError[] = [];
         const warnings: TimesheetImportWarning[] = [];
-        const seenIds = new Set<string>();
         let duplicateCount = 0;
         
         for (let i = 1; i < jsonData.length; i++) {
@@ -88,28 +88,17 @@ export async function parseTimesheetExcel(
           if (!row || row.length === 0) continue;
           
           const rowNum = i + 1; // Excel row number (1-indexed, +1 for header)
-          const entryResult = parseTimesheetRow(row, headerMap, rowNum, existingEntryIds, seenIds);
+          const entryResult = parseTimesheetRow(row, headerMap, rowNum);
           
           if (entryResult.errors.length > 0) {
             errors.push(...entryResult.errors);
           } else if (entryResult.entry) {
-            // Check for duplicates
-            const entryKey = `${entryResult.entry.date}-${entryResult.entry.taskId}-${entryResult.entry.developerId}`;
-            if (seenIds.has(entryKey)) {
-              duplicateCount++;
-              warnings.push({
-                row: rowNum,
-                field: 'duplicate',
-                message: `Duplicate entry detected: ${entryResult.entry.taskTitle} on ${entryResult.entry.date}`,
-                value: entryKey,
-              });
-            } else {
-              seenIds.add(entryKey);
-              if (entryResult.warnings.length > 0) {
-                warnings.push(...entryResult.warnings);
-              }
-              entries.push(entryResult.entry);
+            // Allow duplicate task IDs - developers can log multiple entries for the same task
+            // on the same day or across different days
+            if (entryResult.warnings.length > 0) {
+              warnings.push(...entryResult.warnings);
             }
+            entries.push(entryResult.entry);
           }
         }
         
@@ -196,9 +185,7 @@ function createTimesheetHeaderMap(headers: string[]): Map<string, number> {
 function parseTimesheetRow(
   row: any[],
   headerMap: Map<string, number>,
-  rowNum: number,
-  existingEntryIds: Set<string>,
-  seenIds: Set<string>
+  rowNum: number
 ): { entry?: TimesheetEntry; errors: TimesheetImportError[]; warnings: TimesheetImportWarning[] } {
   const errors: TimesheetImportError[] = [];
   const warnings: TimesheetImportWarning[] = [];
