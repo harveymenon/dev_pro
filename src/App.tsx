@@ -48,6 +48,7 @@ import {
   exportAllDevelopersToExcel,
 } from './utils/excelUtils';
 import ImportModal from './components/ImportModal';
+import GoogleSheetsImportModal from './components/GoogleSheetsImportModal';
 import SortableTaskRow from './components/SortableTaskRow';
 import TimesheetImportModal from './components/TimesheetImportModal';
 import TimesheetDashboard from './components/TimesheetDashboard';
@@ -290,6 +291,7 @@ export default function App() {
   // Import modal
   const [showImportModal, setShowImportModal] = useState(false);
   const [showTimesheetImportModal, setShowTimesheetImportModal] = useState(false);
+  const [showGoogleSheetsImportModal, setShowGoogleSheetsImportModal] = useState(false);
 
   // Overview filters and search
   const [overviewSearch, setOverviewSearch] = useState('');
@@ -1235,7 +1237,13 @@ export default function App() {
                   onClick={() => setShowTimesheetImportModal(true)}
                   className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
                 >
-                  📥 Import Timesheet
+                  📥 Import from Excel
+                </button>
+                <button
+                  onClick={() => setShowGoogleSheetsImportModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+                >
+                  📊 Import from Google Sheets
                 </button>
               </div>
             </div>
@@ -1247,12 +1255,20 @@ export default function App() {
                 </svg>
                 <h3 className="text-lg font-medium text-gray-600 mb-2">No timesheet data yet</h3>
                 <p className="text-gray-400 mb-4">Import timesheet data to see developer performance analytics</p>
-                <button
-                  onClick={() => setShowTimesheetImportModal(true)}
-                  className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
-                >
-                  📥 Import Timesheet
-                </button>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setShowTimesheetImportModal(true)}
+                    className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700"
+                  >
+                    📥 Import from Excel
+                  </button>
+                  <button
+                    onClick={() => setShowGoogleSheetsImportModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+                  >
+                    📊 Import from Google Sheets
+                  </button>
+                </div>
               </div>
             ) : (
               <TimesheetDashboard
@@ -1731,6 +1747,13 @@ export default function App() {
       <TimesheetImportModal
         isOpen={showTimesheetImportModal}
         onClose={() => setShowTimesheetImportModal(false)}
+        onImport={handleImportTimesheetEntries}
+      />
+
+      {/* Import from Google Sheets Modal */}
+      <GoogleSheetsImportModal
+        isOpen={showGoogleSheetsImportModal}
+        onClose={() => setShowGoogleSheetsImportModal(false)}
         onImport={handleImportTimesheetEntries}
       />
 
