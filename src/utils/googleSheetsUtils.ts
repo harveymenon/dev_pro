@@ -29,20 +29,26 @@ export async function fetchGoogleSheetData(
   sheetName: string,
   apiKey: string
 ): Promise<SheetData> {
-  const range = `${sheetName}!A1:Z1000`; // Fetch up to 1000 rows
+  // URL-encode the sheet name to handle spaces and special characters
+  const encodedSheetName = encodeURIComponent(sheetName);
+  const range = `${encodedSheetName}!A1:Z1000`; // Fetch up to 1000 rows
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
+
+  console.log(`📊 Fetching data from sheet: "${sheetName}"`);
 
   try {
     const response = await fetch(url);
     
     if (!response.ok) {
       const error = await response.json();
+      console.error(`❌ Failed to fetch sheet "${sheetName}":`, error);
       throw new Error(error.error?.message || 'Failed to fetch sheet data');
     }
 
     const data = await response.json();
     
     if (!data.values || data.values.length === 0) {
+      console.log(`⚠️ Sheet "${sheetName}" is empty or has no data rows`);
       return {
         sheetName,
         headers: [],
@@ -53,13 +59,15 @@ export async function fetchGoogleSheetData(
     const headers = data.values[0] as string[];
     const rows = data.values.slice(1) as any[][];
 
+    console.log(`✅ Successfully fetched ${rows.length} rows from sheet "${sheetName}"`);
+
     return {
       sheetName,
       headers,
       rows,
     };
   } catch (error) {
-    console.error('Error fetching Google Sheet:', error);
+    console.error(`❌ Error fetching Google Sheet "${sheetName}":`, error);
     throw error;
   }
 }
@@ -325,14 +333,21 @@ export async function importFromGoogleSheets(
   let sheetsProcessed = 0;
 
   try {
+    console.log('🚀 Starting Google Sheets import...');
+    
     // List all sheets
     const sheetNames = await listGoogleSheets(spreadsheetId, apiKey);
+    console.log(`📋 Found ${sheetNames.length} sheet(s):`, sheetNames);
     
     // Skip system sheets
     const developerSheets = sheetNames.filter(name => !name.startsWith('System'));
+    console.log(`👥 Processing ${developerSheets.length} developer sheet(s):`, developerSheets);
 
     // Process each sheet
-    for (const sheetName of developerSheets) {
+    for (let i = 0; i < developerSheets.length; i++) {
+      const sheetName = developerSheets[i];
+      console.log(`\n📄 Processing sheet ${i + 1}/${developerSheets.length}: "${sheetName}"`);
+      
       try {
         // Fetch sheet data
         const sheetData = await fetchGoogleSheetData(spreadsheetId, sheetName, apiKey);
@@ -343,15 +358,20 @@ export async function importFromGoogleSheets(
         // Parse sheet data
         const { entries, errors, warnings } = parseGoogleSheetData(sheetData, developerName);
         
+        console.log(`✅ Sheet "${sheetName}": ${entries.length} entries, ${errors.length} errors, ${warnings.length} warnings`);
+        
         allEntries.push(...entries);
         allErrors.push(...errors);
         allWarnings.push(...warnings);
         sheetsProcessed++;
         
       } catch (error) {
+        console.error(`❌ Failed to process sheet "${sheetName}":`, error);
         allErrors.push(`Failed to process sheet "${sheetName}": ${error}`);
       }
     }
+
+    console.log(`\n🎉 Import complete! Processed ${sheetsProcessed} sheet(s), ${allEntries.length} total entries`);
 
     return {
       success: allErrors.length === 0,
@@ -362,6 +382,7 @@ export async function importFromGoogleSheets(
     };
 
   } catch (error) {
+    console.error('❌ Import failed:', error);
     return {
       success: false,
       entries: [],
