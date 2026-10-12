@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Code Hash Generator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #444;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .hash-value {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            word-break: break-all;
+            background: white;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+        }
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+        .info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .default-code {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Access Code Hash Generator</h1>
+        <p class="subtitle">Generate secure hashes for your access codes</p>
+
+        <div class="default-code">
+            <strong>Default Access Code:</strong> <code>gantt2026</code><br>
+            <small>Use this code or generate a new one below</small>
+        </div>
+
+        <div class="input-group">
+            <label for="accessCode">Enter Your Access Code:</label>
+            <input 
+                type="text" 
+                id="accessCode" 
+                placeholder="Enter your secret access code"
+                value="gantt2026"
+            >
+        </div>
+
+        <button onclick="generateHash()">Generate Hash</button>
+
+        <div id="result" class="result" style="display: none;">
+            <h3>Generated Hash:</h3>
+            <div class="hash-value" id="hashValue"></div>
+            
+            <h3>Update your configuration:</h3>
+            <div class="code-block" id="codeBlock"></div>
+        </div>
+
+        <div class="info">
+            <strong>ℹ️ How to use:</strong>
+            <ol style="margin: 10px 0; padding-left: 20px;">
+                <li>Enter your desired access code above</li>
+                <li>Click "Generate Hash"</li>
+                <li>Copy the generated code block</li>
+                <li>Update <code>src/config/accessConfig.ts</code></li>
+                <li>Rebuild and deploy your application</li>
+            </ol>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ Security Note:</strong><br>
+            This is frontend-only security. The hash is visible in the JavaScript bundle. 
+            For production use with sensitive data, consider backend authentication.
+        </div>
+    </div>
+
+    <script>
+        // Hash function (same as in accessControl.ts)
+        function hashAccessCode(code) {
+            let hash = 0;
+            const str = code.toLowerCase().trim();
+            
+            // Primary hash using djb2 algorithm
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) + hash) + str.charCodeAt(i);
+                hash = hash & hash; // Convert to 32-bit integer
+            }
+            
+            // Secondary hash using sdbm algorithm
+            let hash2 = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash2 = str.charCodeAt(i) + (hash2 << 6) + (hash2 << 16) - hash2;
+                hash2 = hash2 & hash2;
+            }
+            
+            // Combine hashes and convert to hex string
+            const combined = Math.abs(hash).toString(16).padStart(8, '0') + 
+                             Math.abs(hash2).toString(16).padStart(8, '0');
+            
+            return combined;
+        }
+
+        function generateHash() {
+            const code = document.getElementById('accessCode').value;
+            
+            if (!code.trim()) {
+                alert('Please enter an access code');
+                return;
+            }
+
+            const hash = hashAccessCode(code);
+            
+            document.getElementById('hashValue').textContent = hash;
+            document.getElementById('codeBlock').innerHTML = 
+                `// Update src/config/accessConfig.ts\n` +
+                `export const ACCESS_CODE_HASH = '${hash}';\n\n` +
+                `// Your access code is: "${code}"`;
+            
+            document.getElementById('result').style.display = 'block';
+        }
+
+        // Generate hash for default code on load
+        window.onload = function() {
+            generateHash();
+        };
+
+        // Allow Enter key to generate hash
+        document.getElementById('accessCode').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                generateHash();
+            }
+        });
+    </script>
+</body>
+</html>

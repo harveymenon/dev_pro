@@ -52,6 +52,8 @@ import GoogleSheetsImportModal from './components/GoogleSheetsImportModal';
 import SortableTaskRow from './components/SortableTaskRow';
 import TimesheetImportModal from './components/TimesheetImportModal';
 import TimesheetDashboard from './components/TimesheetDashboard';
+import AccessGate from './components/AccessGate';
+import { hasAccess } from './utils/accessControl';
 
 // Sample data
 const SAMPLE_DEVELOPERS: Developer[] = [
@@ -180,6 +182,12 @@ export default function App() {
   const [standardWeeklyHours, setStandardWeeklyHours] = useState<number>(40);
   const [timesheetEntries, setTimesheetEntries] = useState<TimesheetEntry[]>([]);
   const [activeTab, setActiveTab] = useState<string>('overview');
+  const [hasAccessGranted, setHasAccessGranted] = useState<boolean>(false);
+
+  // Check access on mount
+  useEffect(() => {
+    setHasAccessGranted(hasAccess());
+  }, []);
 
   // Initialize state with sample data or load from Supabase
   useEffect(() => {
@@ -802,6 +810,11 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  // Show access gate if not authenticated
+  if (!hasAccessGranted) {
+    return <AccessGate onAccessGranted={() => setHasAccessGranted(true)} />;
   }
 
   return (
